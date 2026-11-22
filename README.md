@@ -100,6 +100,15 @@ initial value, runtime changes win and survive upgrades.
 - The scheduled prompt is stable; settings changes only affect timing and push
   channels. Edit the task itself to change the instructions.
 
+## Testing
+
+- `npm run check` runs the two self-checks: store logic (`scripts/smoke.mjs`)
+  and client registration/render/language (`scripts/client-check.mjs`). Neither
+  needs Harness running.
+- [docs/TESTING.md](docs/TESTING.md) is the manual regression plan: layered
+  cases (loading, the eight tools, the client surfaces, data files, push),
+  expected outputs, a 10-minute pass, and a triage table.
+
 ## Privacy
 
 Files only, no telemetry. Anything networked is the Agent's own `web_search`

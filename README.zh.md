@@ -91,6 +91,11 @@ dsh plugin --profile desktop add /绝对路径/dsh-watchlist
   设置页有「发一条测试通知」按钮可随时验证。
 - 巡检任务的 prompt 保持稳定，改设置只改时间/推送方式；要改指令本身请编辑任务或重装。
 
+## 自检与回归
+
+- `npm run check` 串跑两个自检：逻辑层（`scripts/smoke.mjs`）与客户端注册/渲染/语言（`scripts/client-check.mjs`），不依赖 Harness 运行。
+- [docs/TESTING.md](docs/TESTING.md) 是手工回归计划：按层（加载、8 个工具、界面、数据文件、推送）列用例与预期输出，另有 10 分钟快速通道和故障排查表。
+
 ## 隐私
 
 插件只在本机写文件，不联网、不带遥测；联网检索由 Agent 的 `web_search` 发起，

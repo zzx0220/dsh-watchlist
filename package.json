@@ -47,6 +47,7 @@
     "@deepseek-ai/dsh-tools": "*"
   },
   "scripts": {
-    "smoke": "node scripts/smoke.mjs"
+    "smoke": "node scripts/smoke.mjs",
+    "check": "node scripts/smoke.mjs && node scripts/client-check.mjs"
   }
 }
