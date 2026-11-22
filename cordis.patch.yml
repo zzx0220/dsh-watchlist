@@ -1,4 +1,4 @@
-# dsh-watchlist bundle patch: one Host row.
+# @zzx0220/dsh-watchlist bundle patch: one Host row.
 #
 # `name` must equal package.json's "name" — the loader resolves this row by package
 # name, and a mismatch installs silently without doing anything.
@@ -8,10 +8,11 @@
 # so users can tune behaviour by chatting and keep it across upgrades.
 - insert:
     - id: watchlist
-      name: 'dsh-watchlist'
+      name: '@zzx0220/dsh-watchlist'
       config:
         lookbackDays: 7
-        timeZone: Asia/Shanghai
+        # Empty means "follow the host's time zone"; an explicit zone is still honoured.
+        timeZone: ''
         maxTopicsPerRun: 8
         schedule:
           enabled: true

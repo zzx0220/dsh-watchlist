@@ -11,7 +11,7 @@
  * never touches the filesystem.
  */
 window.__ModuleLoader__.load({
-  id: 'dsh-watchlist',
+  id: '@zzx0220/dsh-watchlist',
   factory(require) {
     const React = require('react')
     const h = React.createElement

@@ -1,4 +1,4 @@
-# dsh-watchlist
+# @zzx0220/dsh-watchlist
 
 [English](README.md) | **中文**
 

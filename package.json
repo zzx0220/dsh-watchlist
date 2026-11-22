@@ -1,5 +1,5 @@
 {
-  "name": "dsh-watchlist",
+  "name": "@zzx0220/dsh-watchlist",
   "version": "0.7.1",
   "description": "Follow-list for DeepSeek Harness: keep the topics you care about, run scheduled web searches for progress, record digests, and push summaries where you want them.",
   "license": "MIT",
@@ -19,7 +19,7 @@
     "lib/",
     "cordis.patch.yml",
     "locale/*.json",
-    "docs",
+    "docs/DETAIL.md",
     "icon.svg",
     "README.md",
     "README.zh.md",
@@ -43,8 +43,14 @@
       "immediately": true
     }
   },
+  "engines": {
+    "dsh": ">=0.2.2-rc.3 <0.3.0"
+  },
   "peerDependencies": {
     "@deepseek-ai/dsh-tools": "*"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "scripts": {
     "smoke": "node scripts/smoke.mjs",

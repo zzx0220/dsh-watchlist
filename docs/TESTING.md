@@ -32,7 +32,7 @@ Two rules keep it useful:
 
 - DeepSeek Harness desktop is running, and the profile links this checkout:
   `~/.dsh/profiles/<profile>/package.json` contains
-  `"dsh-watchlist": "link:/path/to/dsh-watchlist"`.
+  `"@zzx0220/dsh-watchlist": "link:/path/to/dsh-watchlist"`.
 - Node 22+ (this checkout is tested on Node 26).
 - Know the data directory. Default: `$DSH_HOME/watchlist`, i.e.
   `~/.dsh/watchlist`. The settings page and `watchlist_list` both print it.
@@ -104,7 +104,7 @@ full page in the centre column; opening a report from that page's history shows
 the reader. Any blank surface with a console `ReferenceError` fails L1.4 even if
 the others work.
 
-**L1.5 Version.** Settings → Plugins shows `dsh-watchlist` at the version in
+**L1.5 Version.** Settings → Plugins shows `@zzx0220/dsh-watchlist` at the version in
 `package.json`. A stale version after an edit means the profile link
 points at another copy.
 
