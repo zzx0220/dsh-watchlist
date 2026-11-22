@@ -1,5 +1,7 @@
 # dsh-watchlist
 
+[English](README.md) | **中文**
+
 关注清单：把长期想追的主题记下来，让 DeepSeek Harness 里的 Agent 定期联网找进展、
 落盘成日报，并按你的设置推送。
 

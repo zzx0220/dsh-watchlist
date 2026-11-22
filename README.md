@@ -1,5 +1,7 @@
 # dsh-watchlist
 
+**English** | [中文](README.zh.md)
+
 A follow-list for DeepSeek Harness: keep the topics you care about, let an Agent
 search the web for new progress on a schedule, record daily digests, and push
 summaries where you want them.
