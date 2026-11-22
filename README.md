@@ -93,7 +93,10 @@ initial value, runtime changes win and survive upgrades.
 - **Needs web search**: without `web_search` in the model request, a run is empty.
 - **WeChat needs the WeChat plugin**: this plugin only tells the Agent to call
   `notify_wechat`; without it the digest stays in the conversation.
-- **macOS notifications use `osascript`** and stay on this machine.
+- **macOS notifications come from the in-app client**: one per run, only when the
+  run has progress, and clicking it opens that run's report. They are posted by
+  the renderer (attributed to DeepSeek Harness), so the app must be running and
+  allowed under System Settings → Notifications; the settings page has a test button.
 - The scheduled prompt is stable; settings changes only affect timing and push
   channels. Edit the task itself to change the instructions.
 

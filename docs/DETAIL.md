@@ -13,8 +13,10 @@ progress, write it down, and push a summary.
 3. For each topic the agent searches the web (the session's `web_search`), then
    calls `watchlist_record` once, which appends a section to today's digest file.
 4. The agent summarizes the run and pushes it according to the brief: in the
-   conversation, through `notify_wechat` when the WeChat plugin is installed, or
-   as a macOS notification at record time when that channel is enabled.
+   conversation, or through `notify_wechat` when the WeChat plugin is installed.
+   With the macOS channel on, the client half posts one native notification per
+   run by itself — only when the run has progress, only after the run stops being
+   written to, and clicking it opens that run's report.
 
 ## Why it delegates
 

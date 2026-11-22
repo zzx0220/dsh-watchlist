@@ -2,9 +2,11 @@
 
 ## Known follow-ups
 
-### 1. macOS notification: only on progress, one line, clickable — not started
+### 1. macOS notification: only on progress, one line, clickable — done (2026-11-22)
 
 Design agreed on 2026-11-22. Recorded here so the later implementation has a fixed target.
+
+**Implementation** — the Host's `osascript` path was removed: macOS attributes those notifications to Script Editor, so a click opened the wrong app. The client half now posts through the renderer's `Notification` API (attributed to DeepSeek Harness), remembers the last notified run in `localStorage`, waits for a quiet period so the run is listed whole, and routes a click to the run's report in the right sidebar tab, falling back to the in-app reader. The settings page has a "send a test notification" button to verify the system permission.
 
 **Trigger** — only when the run contains at least one entry with `hasUpdate = true`. A run with no progress stays silent unless `heartbeat` is enabled.
 
@@ -27,9 +29,11 @@ Design agreed on 2026-11-22. Recorded here so the later implementation has a fix
 
 ## 已知待办
 
-### 1. macOS 推送：只推"有进展"，一句话、可点击 — 未开始
+### 1. macOS 推送：只推"有进展"，一句话、可点击 — 已完成（2026-11-22）
 
 用户 2026-11-22 提出的设计，先把结论记在这里，后续实现。
+
+**实现说明**：Host 的 `osascript` 路线已移除——系统把这类通知归到 Script Editor 名下，点击会打开错误的 App。改由客户端半用渲染进程的 `Notification` API 发送（归属 DeepSeek Harness），用 `localStorage` 记住上次已通知的 run，等本轮写入静默后再发，保证一次巡检只发一条且主题列全；点击优先打开右侧栏该次报告，失败回退到应用内阅读器。设置页新增「发一条测试通知」按钮，用于验证系统权限。
 
 **触发**：仅当本轮巡检存在 `hasUpdate = true` 的条目时才推送；无实质进展不打扰（可另配 `heartbeat` 例外）。
 

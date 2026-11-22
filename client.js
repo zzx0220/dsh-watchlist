@@ -78,6 +78,12 @@ window.__ModuleLoader__.load({
         session: '会话内消息',
         macos: '系统通知',
         wechat: '微信（需微信插件）',
+        testNotify: '发一条测试通知',
+        testNotifySent: '已发送；看不到请检查 系统设置 → 通知 → DeepSeek Harness',
+        testNotifyDenied: '系统拒绝了通知权限，先在 系统设置 → 通知 里打开',
+        testNotifyFailed: '发送失败，当前环境可能不支持系统通知',
+        notifyTitle: '关注清单：有新进展',
+        notifyTestTitle: '关注清单测试通知',
         digests: '日报',
         openFile: '用外部程序打开',
         openSidebar: '在侧栏打开',
@@ -133,6 +139,12 @@ window.__ModuleLoader__.load({
         session: 'Session message',
         macos: 'System notification',
         wechat: 'WeChat (needs plugin)',
+        testNotify: 'Send a test notification',
+        testNotifySent: 'Sent; if it is missing check System Settings → Notifications → DeepSeek Harness',
+        testNotifyDenied: 'Notifications are denied; enable them in System Settings → Notifications',
+        testNotifyFailed: 'Failed; this environment may not support system notifications',
+        notifyTitle: 'Watchlist: new progress',
+        notifyTestTitle: 'Watchlist test notification',
         digests: 'Digests',
         openFile: 'Open externally',
         openSidebar: 'Open in sidebar',
@@ -197,8 +209,116 @@ window.__ModuleLoader__.load({
       return response.json()
     }
 
-    /** Client context from apply(); components use it to reach layout / sidebarRight. */
-    let services = null
+    /* ---------- Native notifications: one per run, only when the run has updates ----------
+     * The Host used to post through `osascript`, which macOS attributes to Script
+     * Editor, so a click opened the wrong app. The renderer's Notification API is
+     * attributed to DeepSeek Harness and can carry an onclick, which is the only
+     * route that lands on the report. Runs happen while the app is open, so the
+     * renderer is there to post them; a closed app fires no runs either.
+     */
+    const NOTIFIED_KEY = 'dsh-watchlist-notified-run'
+    const NOTIFY_MAX_AGE = 2 * 60 * 60 * 1000 // an older run is history, not news
+    const NOTIFY_QUIET_MS = 60 * 1000 // wait until the run stops being written to
+
+    function readNotifiedRun() {
+      try {
+        return (window.localStorage && window.localStorage.getItem(NOTIFIED_KEY)) || null
+      } catch {
+        return null
+      }
+    }
+
+    function writeNotifiedRun(id) {
+      try {
+        if (window.localStorage) window.localStorage.setItem(NOTIFIED_KEY, id)
+      } catch {
+        /* No persistent store: the guard degrades to per page load */
+      }
+    }
+
+    function shortTopicName(topic) {
+      const text = String(topic || '').split(/[（(，,：:]/)[0].trim()
+      return text.length > 18 ? `${text.slice(0, 18)}…` : text
+    }
+
+    function composeNotifyBody(entries) {
+      const names = [...new Set(entries.map((entry) => shortTopicName(entry.topic)).filter(Boolean))]
+      const shown = names.slice(0, 3)
+      const more = names.length - shown.length
+      const list = shown.join(zh() ? '、' : ', ') + (more > 0 ? (zh() ? ` 等 ${names.length} 个` : ` and ${more} more`) : '')
+      return (zh() ? `${list} 有新进展` : `Progress on ${list}`).slice(0, 120)
+    }
+
+    function notificationSupport() {
+      if (typeof Notification === 'undefined') return 'unsupported'
+      if (Notification.permission === 'denied') return 'denied'
+      return 'ok'
+    }
+
+    /** Open a run's report in the in-app reader; fall back to the right sidebar tab. */
+    function openRunReport(run) {
+      if (!run) return
+      if (openReader) {
+        openReader({ runId: run.id, path: run.path, from: run.from, to: run.to }, 'all')
+      }
+    }
+
+    function notifyRun(run, test) {
+      if (notificationSupport() !== 'ok') return false
+      const updated = (run.entries || []).filter((entry) => entry.hasUpdate === true)
+      if (!test && !updated.length) return false
+      try {
+        const title = test ? COPY.notifyTestTitle : COPY.notifyTitle
+        const body = test
+          ? zh()
+            ? '点它应打开最近一次巡检报告'
+            : 'Clicking it should open the latest report'
+          : composeNotifyBody(updated)
+        const note = new Notification(title, { body })
+        note.onclick = () => {
+          try {
+            if (typeof window.focus === 'function') window.focus()
+          } catch {
+            /* Focus is best effort */
+          }
+          const opened = run && run.id ? openDigestTab(run.id) : 'skipped'
+          if (run && run.id && opened !== 'ok') openRunReport(run)
+          try {
+            note.close()
+          } catch {
+            /* The system may have dismissed it already */
+          }
+        }
+        return true
+      } catch {
+        return false
+      }
+    }
+
+    /** Runs on every state refresh: at most one notification per run, and only for a run with updates. */
+    function useRunNotifier(state) {
+      useEffect(() => {
+        if (!state || !state.ok) return
+        const channels = (state.settings && state.settings.push && state.settings.push.channels) || []
+        if (!channels.includes('macos')) return
+        const run = (state.runs || [])[0]
+        if (!run) return
+        if (readNotifiedRun() === run.id) return
+        const updated = (run.entries || []).filter((entry) => entry.hasUpdate === true)
+        const startedAt = Date.parse(run.startedAt) || 0
+        const fresh = Date.now() - startedAt < NOTIFY_MAX_AGE
+        if (!fresh || !updated.length) {
+          writeNotifiedRun(run.id)
+          return
+        }
+        const lastAt = Math.max(startedAt, ...(run.entries || []).map((entry) => Date.parse(entry.at) || 0))
+        if (Date.now() - lastAt < NOTIFY_QUIET_MS) return // still being written to; wait for the next poll
+        notifyRun(run, false)
+        writeNotifiedRun(run.id)
+      }, [state])
+    }
+
+
 
     function currentSessionId() {
       try {
@@ -504,6 +624,7 @@ window.__ModuleLoader__.load({
       const [draft, setDraft] = useState('')
       const [keywords, setKeywords] = useState('')
       const [every, setEvery] = useState('')
+      const [notifyNotice, setNotifyNotice] = useState('')
       if (!state) return h('div', { className: 'dwl' }, h(StyleTag), error || COPY.loading)
 
       const settings = state.settings || {}
@@ -659,6 +780,29 @@ window.__ModuleLoader__.load({
           ),
           h('label', { className: 'dwl-check dwl-meta' }, h('input', { type: 'checkbox', disabled: true }), COPY.wechat),
         ),
+        h(
+          'div',
+          { className: 'dwl-field' },
+          h(
+            'button',
+            {
+              className: 'dwl-btn',
+              onClick: () => {
+                const support = notificationSupport()
+                if (support !== 'ok') {
+                  setNotifyNotice(support === 'denied' ? COPY.testNotifyDenied : COPY.testNotifyFailed)
+                  return
+                }
+                const latest = (state.runs || [])[0]
+                setNotifyNotice(
+                  notifyRun(latest || { id: '', entries: [] }, true) ? COPY.testNotifySent : COPY.testNotifyFailed,
+                )
+              },
+            },
+            COPY.testNotify,
+          ),
+          notifyNotice ? h('span', { className: 'dwl-meta' }, notifyNotice) : null,
+        ),
 
         h('h3', null, COPY.language),
         h(
@@ -692,6 +836,7 @@ window.__ModuleLoader__.load({
         const timer = setInterval(reload, 60000)
         return () => clearInterval(timer)
       }, [reload])
+      useRunNotifier(state)
       const unread = (state && state.unread) || 0
       const wide = props && props.wide !== false
       return h(

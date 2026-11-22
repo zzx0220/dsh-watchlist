@@ -14,9 +14,11 @@
  *     the DSH Automation tasks page, where the user can pause or edit it.
  *   - Storage in files: topics.json / settings.json / digests/*.md — hand
  *     editable and backup friendly.
- *   - Push per channel: session (always available), macOS notification (local
- *     osascript), WeChat (the Agent calls notify_wechat; the plugin does not
- *     couple to the WeChat plugin).
+ *   - Push per channel: session (always available), macOS notification (the
+ *     client half posts one native notification per run, only when the run has
+ *     progress and only after the run stops being written to; clicking it opens
+ *     that run's report), WeChat (the Agent calls notify_wechat; the plugin does
+ *     not couple to the WeChat plugin).
  */
 import { execFile } from 'node:child_process'
 import { existsSync, readFileSync } from 'node:fs'
@@ -99,11 +101,6 @@ function describeTiming(timing) {
   }
   if (timing.kind === 'cron') return `每月 ${timing.cron.expression.split(' ')[2]} 日 ${timing.cron.expression.split(' ')[1]}:${String(timing.cron.expression.split(' ')[0]).padStart(2, '0')}（${timing.cron.time_zone}）`
   return timing.kind
-}
-
-function notifyMacos(title, body) {
-  const escape = (text) => String(text).replace(/\\/g, '\\\\').replace(/"/g, '\\"')
-  execFile('osascript', ['-e', `display notification "${escape(body)}" with title "${escape(title)}"`], () => {})
 }
 
 export function apply(ctx, config) {
@@ -613,9 +610,6 @@ export function apply(ctx, config) {
         note: args.note,
       })
       store.touchTopics(dataDir, [hit.id])
-      if (args.hasUpdate === true && settings.push.channels.includes('macos')) {
-        notifyMacos('关注清单：有新进展', `${hit.topic}：${String(args.summary).slice(0, 120)}`)
-      }
       return {
         message: `已记录「${hit.topic}」→ ${result.path}（本轮第 ${result.runTotal} 条）`,
         recorded: true,
