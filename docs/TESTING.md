@@ -85,7 +85,7 @@ check Settings → Plugins that `include:watchlist` is enabled, then reload
 curl -s http://127.0.0.1:<port>/dsh-watchlist-api/state | head -c 300
 ```
 
-Pass: `{"ok":true,"dataDir":…,"topics":[…],"settings":{…},"schedule":{…},"runs":[…],"unread":…,"unreadUpdates":…}`.
+Pass: `{"ok":true,"dataDir":…,"topics":[…],"settings":{…},"schedule":{…},"runs":[…],"unread":…,"unreadUpdates":…,"unreadRunIds":[…]}`.
 `ok:false` or 404 means the Host's `webServer` route did not register (it retries
 briefly at load, then gives up); the plugin still works through the tools, only
 the UI is blind.
@@ -248,6 +248,7 @@ change, wait for a poll or reopen the surface before judging it.
 - 发一条测试通知 → system notification `关注清单测试通知` (or an inline hint when
   permission is denied / unsupported).
 - 界面语言: 跟随 DSH / 中文 / English; see L3.7.
+- 全部已读 beside the topic count clears every unread report at once.
 - Save feedback: no red error line; the change survives a page reload.
 - The time field patches on every keystroke; an invalid intermediate value falls
   back to `08:30`, so clear it, type the full `HH:MM`, then confirm
@@ -270,8 +271,8 @@ change, wait for a poll or reopen the surface before judging it.
 
 ### L3.3 Main page (the whole list)
 
-- Header: eyebrow label, title, one-line subtitle, `立即运行一次`, and an
-  `N 条新进展` chip while progress is unread.
+- Header: eyebrow label, title, one-line subtitle, `立即运行一次`, an
+  `N 条新进展` chip while progress is unread, and a `全部已读` button beside it.
 - One read-only status line under the header: auto-run dot with 开/关,
   `下次触发 …`, the push channels in use, and the
   `巡检设置：设置 → 关注清单` hint. It carries **no controls** — this page edits
@@ -281,6 +282,9 @@ change, wait for a poll or reopen the surface before judging it.
 - Reports card: one block per day file, header `YYYY-MM-DD` and `N 次巡检 · M 条`,
   then one row per topic that opens the reader for that file. Empty state
   `还没有巡检记录。`.
+- A report not yet read carries a `未读` tag with a dot on its run line (the run line
+  appears for a multi-run day, or whenever the run is unread), and the tag disappears
+  for that run only after its report is opened.
 - Schedule, push and language controls appear only in Settings → Watchlist; if
   they show up here as well, this case fails (duplication was removed on purpose).
 - The page scrolls inside the centre column; the header stays put and nothing
@@ -299,6 +303,8 @@ change, wait for a poll or reopen the surface before judging it.
   editor) and `关闭`.
 - Backdrop click and Esc close the reader and return to whatever was underneath
   (the page, or the app itself when the notification opened it).
+- Opening the reader marks **that report** read: the badge drops by its entries only,
+  and another report that was still unread keeps its count and its `未读` tag.
 - Delete the report file on disk and reopen: the reader shows an error line, not
   a blank card or a crash.
 
@@ -349,13 +355,16 @@ digests/
   `from`, `to`, `entries`, `file`, `day`, and `seq`; every entry has `at`,
   `topic`, `hasUpdate`, `summary`, `sources`, `note`. Migrated legacy runs have
   `legacyFile` instead of `file` and resolve to their old `run-<stamp>.md`.
-- **Unread.** Unread = entries with `at` later than `state.lastSeenAt`; a fresh
-  install (no `lastSeenAt`) counts all entries. Opening a report marks seen;
-  merely opening the main page does not, so the sidebar badge stays until the
-  report is read.
-- **Unread progress.** `unreadUpdates` is the same rule restricted to entries with
-  `hasUpdate: true`; it is what the sidebar badge and the page chip count, so a run
-  that found nothing never flags the entry.
+- **Unread.** Read state is per report: `state.seenRunIds` lists the runs whose
+  report was opened, so reading today's report leaves yesterday's unread. Counts only
+  include runs missing from that list; opening the main page marks nothing.
+- **Legacy states.** A state without `seenRunIds` falls back to the old rule (a run is
+  read when its `startedAt` is at or before `lastSeenAt`). The first per-report write
+  seeds the id list from that boundary, so one click never resurrects old reads.
+- **Unread progress.** `unreadUpdates` counts entries with `hasUpdate: true` in
+  unread runs; it is what the sidebar badge and the page chip show, so a run that
+  found nothing never flags the entry. `unreadRunIds` names the unread reports so the
+  history can tag them; `action: "seen"` with no `runId` marks everything read.
 - **Guards.** `action: "read"` rejects a `runId` that is not
   `run-YYYYMMDDTHHMMSSZ(-N)`; `action: "open"` only accepts `.md` files under
   `<dataDir>/digests` and only on macOS; the whole API rejects non-loopback

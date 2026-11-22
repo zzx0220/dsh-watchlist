@@ -20,6 +20,7 @@ const STATE = {
   dataDir: '/tmp/watchlist',
   unread: 3,
   unreadUpdates: 2,
+  unreadRunIds: ['run-20261122T141848Z'],
   topics: [
     { id: 't1', topic: '主题A', keywords: ['关键词'], everyDays: 1, lastCheckedAt: '2026-11-21T08:30:00Z' },
     { id: 't2', topic: '主题B', keywords: [], everyDays: 0, lastCheckedAt: null },
@@ -241,8 +242,8 @@ const run = STATE.runs[0]
 active = 'en'
 for (const fn of subs) fn()
 const cases = [
-  ['main page', 'main#watchlist', {}, ['主题A', '2026-11-22', 'Next run', '2 new']],
-  ['settings section', 'settings.section#watchlist', {}, ['主题A']],
+  ['main page', 'main#watchlist', {}, ['主题A', '2026-11-22', 'Next run', '2 new', 'Mark all read', 'unread']],
+  ['settings section', 'settings.section#watchlist', {}, ['主题A', 'Mark all read']],
   ['nav icon', 'sidebar.panellist#watchlist', { size: 16, active: false }, []],
   ['reader', 'shell.overlay#watchlist-overlay', {}, ['状态：有实质进展']],
 ]

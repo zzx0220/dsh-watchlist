@@ -271,6 +271,7 @@ export function apply(ctx, config) {
         runs: store.listRuns(dataDir, 14),
         unread: store.unreadCount(dataDir),
         unreadUpdates: store.unreadUpdateCount(dataDir),
+        unreadRunIds: store.unseenRunIds(dataDir),
         lastSeenAt: state.lastSeenAt ?? null,
       }
     }
@@ -299,7 +300,14 @@ export function apply(ctx, config) {
         const type = String(body.type ?? '')
         try {
           if (type === 'seen') {
-            store.markSeen(dataDir)
+            // No runId means "mark everything read"; one runId clears only that report.
+            const runId = body.runId === undefined || body.runId === null ? '' : String(body.runId).trim()
+            if (runId) {
+              if (!RUN_ID_RE.test(runId)) return sendJson(res, 400, { ok: false, error: 'runId 格式不对' })
+              store.markRunSeen(dataDir, runId)
+            } else {
+              store.markSeen(dataDir)
+            }
             return sendJson(res, 200, { ok: true })
           }
           if (type === 'add') {

@@ -162,6 +162,48 @@ try {
     assert.equal(store.unreadUpdateCount(dir), 0)
   })
 
+  check('reading one report marks only that report', () => {
+    const readDir = mkdtempSync(join(tmpdir(), 'watchlist-read-'))
+    try {
+      const first = store.appendRunEntry(readDir, { topic: 'Topic A', hasUpdate: true, summary: 'a' })
+      store.closeCurrentRun(readDir)
+      const second = store.appendRunEntry(readDir, { topic: 'Topic B', hasUpdate: true, summary: 'b' })
+      assert.deepEqual(store.unseenRunIds(readDir).sort(), [first.runId, second.runId].sort())
+      assert.equal(store.unreadUpdateCount(readDir), 2)
+      store.markRunSeen(readDir, second.runId)
+      assert.deepEqual(store.unseenRunIds(readDir), [first.runId], 'the other report stays unread')
+      assert.equal(store.unreadUpdateCount(readDir), 1)
+      store.markRunSeen(readDir, first.runId)
+      assert.deepEqual(store.unseenRunIds(readDir), [])
+      assert.equal(store.unreadUpdateCount(readDir), 0)
+    } finally {
+      rmSync(readDir, { recursive: true, force: true })
+    }
+  })
+
+  check('an old state seeds read reports from its timestamp', () => {
+    const legacySeenDir = mkdtempSync(join(tmpdir(), 'watchlist-seen-'))
+    try {
+      const first = store.appendRunEntry(legacySeenDir, { topic: 'Old', hasUpdate: true, summary: 'a' })
+      store.closeCurrentRun(legacySeenDir)
+      // Pretend anything started at or before this instant was already read, the
+      // pre-seenRunIds rule. The boundary is the first run's own stamp, so the test
+      // does not depend on two records landing in different milliseconds.
+      const boundary = store.loadRuns(legacySeenDir)[0].startedAt
+      store.saveState(legacySeenDir, { lastSeenAt: boundary })
+      assert.deepEqual(store.unseenRunIds(legacySeenDir), [], 'the old boundary still applies')
+      const until = Date.now() + 5
+      while (Date.now() < until) { /* let the next run start after the boundary */ }
+      const second = store.appendRunEntry(legacySeenDir, { topic: 'New', hasUpdate: true, summary: 'b' })
+      assert.deepEqual(store.unseenRunIds(legacySeenDir), [second.runId])
+      // The first per-report write must not resurrect the run the old boundary covered.
+      store.markRunSeen(legacySeenDir, second.runId)
+      assert.deepEqual(store.unseenRunIds(legacySeenDir), [], `run ${first.runId} must stay read`)
+    } finally {
+      rmSync(legacySeenDir, { recursive: true, force: true })
+    }
+  })
+
   check('remove by name, then by id', () => {
     assert.equal(store.removeTopic(dir, 'Some scientific advance').remaining, 0)
     const added = store.addTopic(dir, { topic: 'Second topic' })

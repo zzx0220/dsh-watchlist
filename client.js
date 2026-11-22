@@ -90,6 +90,8 @@ window.__ModuleLoader__.load({
         lastRun: '上次巡检',
         never: '尚未巡检',
         newUpdates: '条新进展',
+        markAllRead: '全部已读',
+        unreadReport: '未读',
         close: '关闭',
         entryHint: '点条目直接阅读',
         loading: '加载中…',
@@ -142,6 +144,8 @@ window.__ModuleLoader__.load({
         lastRun: 'Last run',
         never: 'never',
         newUpdates: 'new',
+        markAllRead: 'Mark all read',
+        unreadReport: 'unread',
         close: 'Close',
         entryHint: 'Click an entry to read',
         loading: 'Loading…',
@@ -496,6 +500,13 @@ window.__ModuleLoader__.load({
         background: none; color: inherit; font: inherit; font-size: 12px; padding: 8px 12px; }
       .dwlp-entry:hover { background: var(--dsw-alias-bg-layer-2, rgba(0,0,0,.04)); }
       .dwlp-empty { font-size: 12px; color: var(--dsw-alias-label-secondary, #666); padding: 6px 0; }
+      .dwlp-runhead { display: flex; align-items: center; gap: 8px; padding: 6px 12px 2px;
+        font-size: 11px; color: var(--dsw-alias-label-secondary, #666);
+        background: var(--dsw-alias-bg-layer-2, rgba(0,0,0,.02));
+        border-top: 1px solid var(--dsw-alias-border-l1, rgba(0,0,0,.06)); }
+      .dwlp-unread { position: relative; padding-left: 9px; color: var(--dsw-alias-link, #2b6cf6); font-weight: 600; }
+      .dwlp-unread::before { content: ''; position: absolute; left: 0; top: 50%; width: 5px; height: 5px;
+        margin-top: -2.5px; border-radius: 50%; background: var(--dsw-alias-link, #2b6cf6); }
 
       /* Nav glyph: the sidebar owns the row, button and label; this is only the mark. */
       .dwlp-glyph { position: relative; flex: none; display: inline-flex; align-items: center;
@@ -884,6 +895,7 @@ window.__ModuleLoader__.load({
     /** Reports grouped by day file; one entry per topic, clicking opens the reader. */
     function HistorySection({ state }) {
       const groups = groupRunsByFile((state && state.runs) || [])
+      const unread = new Set((state && state.unreadRunIds) || [])
       if (!groups.length) return h('div', { className: 'dwlp-empty' }, COPY.noDigest)
       return h(
         'div',
@@ -902,8 +914,18 @@ window.__ModuleLoader__.load({
                 `${group.runs.length}${zh() ? ' 次巡检' : group.runs.length === 1 ? ' run' : ' runs'} · ${group.entries}${zh() ? ' 条' : ''}`,
               ),
             ),
-            group.runs.flatMap((runRecord) =>
-              runRecord.entries.map((entry, index) =>
+            group.runs.flatMap((runRecord, runIndex) => [
+              runRecord.entries.length && (group.runs.length > 1 || unread.has(runRecord.id))
+                ? h(
+                    'div',
+                    { key: `${runRecord.id}-head`, className: 'dwlp-runhead' },
+                    h('span', null, fmt(runRecord.startedAt)),
+                    unread.has(runRecord.id)
+                      ? h('span', { className: 'dwlp-unread' }, COPY.unreadReport)
+                      : null,
+                  )
+                : null,
+              ...runRecord.entries.map((entry, index) =>
                 h(
                   'button',
                   {
@@ -912,11 +934,11 @@ window.__ModuleLoader__.load({
                     onClick: () =>
                       openReader({ runId: runRecord.id, path: runRecord.path, from: runRecord.from, to: runRecord.to }),
                   },
-                  h('div', null, entry.topic),
+                  h('div', { className: 'dwlp-topic-name' }, entry.topic),
                   h('div', { className: 'dwl-meta' }, entry.summary),
                 ),
               ),
-            ),
+            ]),
           ),
         ),
       )
@@ -943,6 +965,12 @@ window.__ModuleLoader__.load({
           'div',
           { className: 'dwl-meta' },
           `${COPY.dataDir}：${state.dataDir} · ${state.topics.length} ${zh() ? '个主题' : 'topics'}`,
+        ),
+        h(
+          'div',
+          { className: 'dwl-field' },
+          h('span', { className: 'dwl-meta' }, `${(state && state.unreadUpdates) || 0} ${COPY.newUpdates}`),
+          h('button', { className: 'dwl-btn', disabled: busy, onClick: () => run('seen') }, COPY.markAllRead),
         ),
 
         h('h3', null, COPY.topics),
@@ -1001,6 +1029,7 @@ window.__ModuleLoader__.load({
             'div',
             { className: 'dwlp-head-actions' },
             unread ? h('span', { className: 'dwlp-chip' }, `${unread} ${COPY.newUpdates}`) : null,
+            unread ? h('button', { className: 'dwl-btn', disabled: busy, onClick: () => run('seen') }, COPY.markAllRead) : null,
             h('button', { className: 'dwl-btn dwlp-primary', disabled: busy, onClick: () => run('run') }, COPY.runNow),
           ),
         ),
@@ -1205,7 +1234,7 @@ window.__ModuleLoader__.load({
       useEffect(() => {
         if (!reader) return undefined
         reload()
-        act('seen').then(() => reload())
+        act('seen', { runId: reader.runId }).then(() => reload())
         const onKey = (event) => {
           if (event.key === 'Escape') closeReader()
         }
