@@ -257,14 +257,6 @@ window.__ModuleLoader__.load({
       ui.all = false
       notifyUi()
     }
-    /** Step back one layer: the same effect as Escape and the "← Back" control. */
-    function stepBack() {
-      const ui = uiStore()
-      if (ui.reader) closeReader()
-      else if (ui.all) closeAll()
-      else if (ui.open) setOpen(false)
-    }
-
     /** Close every layer at once (the ✕ control). */
     function closeEverything() {
       const ui = uiStore()
@@ -871,7 +863,7 @@ window.__ModuleLoader__.load({
     function AllRuns({ state }) {
       const runs = (state && state.runs) || []
       return [
-        h('div', { key: 'backdrop', className: 'dwl-backdrop', onClick: stepBack }),
+        h('div', { key: 'backdrop', className: 'dwl-backdrop', onClick: closeEverything }),
         h(
           'div',
           { key: 'card', className: 'dwl dwl-reader', role: 'dialog', 'aria-label': COPY.allTitle },
@@ -938,7 +930,7 @@ window.__ModuleLoader__.load({
         }
       }, [view.runId])
       return [
-        h('div', { key: 'backdrop', className: 'dwl-backdrop', onClick: stepBack }),
+        h('div', { key: 'backdrop', className: 'dwl-backdrop', onClick: closeEverything }),
         h(
         'div',
         { key: 'card', className: 'dwl dwl-reader', role: 'dialog', 'aria-label': COPY.title },
