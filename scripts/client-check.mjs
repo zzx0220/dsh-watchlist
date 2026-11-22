@@ -50,14 +50,22 @@ const STATE = {
 
 const src = fs.readFileSync(new URL('../client.js', import.meta.url), 'utf8')
 let def
+/** Bodies the client POSTed, so a passing render still proves the right action was sent. */
+const actions = []
+let allSeen = false
 const sandbox = {
   window: { __ModuleLoader__: { load: (d) => { def = d } }, addEventListener() {}, removeEventListener() {} },
   navigator: { language: 'zh-CN' },
-  fetch: async (url) => ({
-    json: async () =>
-      String(url).endsWith('/action')
-        ? { ok: true, text: '# 报告\n\n## 主题\n\n- 状态：有实质进展\n- 来源：https://example.com' }
-        : STATE,
+  fetch: async (url, init) => ({
+    json: async () => {
+      if (!String(url).endsWith('/action')) {
+        return allSeen ? { ...STATE, unread: 0, unreadUpdates: 0, unreadRunIds: [] } : STATE
+      }
+      const body = init && init.body ? JSON.parse(init.body) : { type: '' }
+      actions.push(body)
+      if (body.type === 'seen') allSeen = true
+      return { ok: true, text: '# 报告\n\n## 主题\n\n- 状态：有实质进展\n- 来源：https://example.com', unread: 0, unreadUpdates: 0 }
+    },
   }),
   setInterval: () => 0,
   clearInterval() {},
@@ -303,6 +311,29 @@ function nodesOf(tree, out = []) {
     console.log('nav icon: FAIL a badge rendered without substantive updates')
   } else {
     console.log('nav icon: no badge without substantive updates')
+  }
+}
+
+// Reading a report must mark that report only and move the badge without a manual refresh.
+{
+  actions.length = 0
+  allSeen = false
+  const readerView = { runId: run.id, path: run.path, from: run.from, to: run.to }
+  sandbox.window.__dshWatchlistUi = { reader: readerView, unread: 3, unreadUpdates: 2, dataRev: 0, listeners: new Set() }
+  await renderComponent(comps['shell.overlay#watchlist-overlay'], {})
+  const seen = actions.filter((body) => body.type === 'seen')
+  // Each render pass fires the effect, so the count is not one; every call must name the report.
+  if (!seen.length || seen.some((body) => body.runId !== run.id)) {
+    failures += 1
+    console.log(`reader: FAIL expected seen actions for ${run.id}, got ${JSON.stringify(seen)}`)
+  } else if (sandbox.window.__dshWatchlistUi.unreadUpdates !== 0) {
+    failures += 1
+    console.log('reader: FAIL the badge counts were not applied from the action result')
+  } else if (sandbox.window.__dshWatchlistUi.dataRev < 1) {
+    failures += 1
+    console.log('reader: FAIL the read did not bump the data revision other surfaces watch')
+  } else {
+    console.log('reader: marks its own report, applies counts and bumps the revision')
   }
 }
 

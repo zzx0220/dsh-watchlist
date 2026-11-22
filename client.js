@@ -308,13 +308,15 @@ window.__ModuleLoader__.load({
      * shell.overlay separate copies, so the unread dot and clicks would never agree.
      */
     function uiStore() {
-      if (!window.__dshWatchlistUi) window.__dshWatchlistUi = { reader: null, unread: 0, unreadUpdates: 0, listeners: new Set() }
+      if (!window.__dshWatchlistUi) {
+        window.__dshWatchlistUi = { reader: null, unread: 0, unreadUpdates: 0, dataRev: 0, listeners: new Set() }
+      }
       return window.__dshWatchlistUi
     }
     function notifyUi() {
       for (const listener of uiStore().listeners) listener()
     }
-    /** Publish both counts from whichever polling component last read the state. */
+    /** Publish both counts from whichever component last read the state. */
     function setCounts(total, updates) {
       const ui = uiStore()
       const nextTotal = Number(total) || 0
@@ -322,6 +324,17 @@ window.__ModuleLoader__.load({
       if (ui.unread === nextTotal && ui.unreadUpdates === nextUpdates) return
       ui.unread = nextTotal
       ui.unreadUpdates = nextUpdates
+      notifyUi()
+    }
+    /** Apply the counts an action already returned, so the badge moves without a refetch. */
+    function applyCounts(result) {
+      if (!result || result.ok === false) return
+      setCounts(result.unread, result.unreadUpdates)
+    }
+    /** Something the server now holds differently: every mounted surface refetches. */
+    function bumpData() {
+      const ui = uiStore()
+      ui.dataRev += 1
       notifyUi()
     }
     function openReader(view) {
@@ -343,16 +356,21 @@ window.__ModuleLoader__.load({
         return () => ui.listeners.delete(listener)
       }, [])
       const ui = uiStore()
-      return { reader: ui.reader, unread: ui.unread, unreadUpdates: ui.unreadUpdates }
+      return { reader: ui.reader, unread: ui.unread, unreadUpdates: ui.unreadUpdates, dataRev: ui.dataRev }
     }
 
     function useWatchlist() {
       const [state, setState] = useState(null)
       const [error, setError] = useState('')
       const [busy, setBusy] = useState(false)
+      // Reads can overlap (mount, poll, after an action). Without a token the older
+      // response lands last and reinstates the counts it was fetched with.
+      const [seq] = useState(() => ({ n: 0 }))
       const load = useCallback(async () => {
+        const mine = ++seq.n
         try {
           const data = await getState()
+          if (mine !== seq.n) return
           if (data && data.ok) {
             setState(data)
             setError('')
@@ -361,9 +379,10 @@ window.__ModuleLoader__.load({
             setError((data && data.error) || COPY.failed)
           }
         } catch (cause) {
+          if (mine !== seq.n) return
           setError(String((cause && cause.message) || cause))
         }
-      }, [])
+      }, [seq])
       useEffect(() => {
         load()
       }, [load])
@@ -947,7 +966,11 @@ window.__ModuleLoader__.load({
     /** Settings → Watchlist: the same controls in a plain scrolling section. */
     function WatchlistPage() {
       useLang()
-      const { state, error, busy, run } = useWatchlist()
+      const { state, error, busy, run, reload } = useWatchlist()
+      const { dataRev } = useUiState()
+      useEffect(() => {
+        reload()
+      }, [reload, dataRev])
       const [notifyNotice, setNotifyNotice] = useState('')
       if (!state) return h('div', { className: 'dwl' }, h(StyleTag), error || COPY.loading)
 
@@ -1003,7 +1026,11 @@ window.__ModuleLoader__.load({
     /** The sidebar panel: the whole watchlist in one page, selected from the nav list. */
     function WatchlistPanel() {
       useLang()
-      const { state, error, busy, run } = useWatchlist()
+      const { state, error, busy, run, reload } = useWatchlist()
+      const { dataRev } = useUiState()
+      useEffect(() => {
+        reload()
+      }, [reload, dataRev])
 
       const settings = (state && state.settings) || {}
       const schedule = (state && state.schedule) || {}
@@ -1233,8 +1260,19 @@ window.__ModuleLoader__.load({
       }, [reload])
       useEffect(() => {
         if (!reader) return undefined
-        reload()
-        act('seen', { runId: reader.runId }).then(() => reload())
+        // Marking one report read is what makes the badge and the history tags move;
+        // the page holding the history is a different mount, so it needs the revision.
+        // Without an id there is nothing to mark, and a missing field must never fall
+        // through to the server's "mark everything read" branch.
+        if (reader.runId) {
+          act('seen', { runId: reader.runId })
+            .then((result) => {
+              applyCounts(result)
+              bumpData()
+              reload()
+            })
+            .catch(() => reload())
+        }
         const onKey = (event) => {
           if (event.key === 'Escape') closeReader()
         }

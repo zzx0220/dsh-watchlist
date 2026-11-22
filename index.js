@@ -308,7 +308,13 @@ export function apply(ctx, config) {
             } else {
               store.markSeen(dataDir)
             }
-            return sendJson(res, 200, { ok: true })
+            // Answer with the new counts so the badge can move without a second round trip.
+            return sendJson(res, 200, {
+              ok: true,
+              unread: store.unreadCount(dataDir),
+              unreadUpdates: store.unreadUpdateCount(dataDir),
+              unreadRunIds: store.unseenRunIds(dataDir),
+            })
           }
           if (type === 'add') {
             const result = store.addTopic(dataDir, body)

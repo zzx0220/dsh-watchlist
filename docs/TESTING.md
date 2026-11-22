@@ -305,6 +305,10 @@ change, wait for a poll or reopen the surface before judging it.
   (the page, or the app itself when the notification opened it).
 - Opening the reader marks **that report** read: the badge drops by its entries only,
   and another report that was still unread keeps its count and its `未读` tag.
+- No manual refresh is needed: the badge moves on the action's own answer, and the
+  page/settings sections refetch on a shared data revision, so the `未读` tags of the
+  report just read disappear while the reader is still open. An older `/state`
+  response landing late must not resurrect the count (overlapping reads are ordered).
 - Delete the report file on disk and reopen: the reader shows an error line, not
   a blank card or a crash.
 
