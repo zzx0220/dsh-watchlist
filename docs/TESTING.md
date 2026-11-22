@@ -26,7 +26,7 @@ Two rules keep it useful:
 | L2 | the 8 `watchlist_*` tools | 9 |
 | L3 | settings page, nav entry, main page, reader, notifications, language | 7 |
 | L4 | files on disk, report format, unread counting, path guards | 5 |
-| L5 | push channels (session / macOS / WeChat) | 3 |
+| L5 | push channels (session / macOS) | 2 |
 
 ## 2. Before you start
 
@@ -60,10 +60,10 @@ Run from `dsh-watchlist/`:
 | L0.3 | `node --check index.js && node --check client.js && node --check lib/store.js` | no output, exit 0 |
 | L0.4 | `npm run check` | runs L0.1 + L0.2 in one go |
 
-L0.1 covers topic add/dedupe, per-topic cadence, settings clamping, one file per
-day with one section per run, record-without-brief, unread counting, and legacy
-migration. L0.2 covers slot registration, the language switch, and a recursive
-render of all six components. **Neither touches scheduling, HTTP, real
+L0.1 covers topic add/dedupe, per-topic cadence, settings clamping (including
+unknown or removed push channels), one file per day with one section per run,
+record-without-brief, unread counting, and legacy migration. L0.2 covers slot
+registration, the language switch, and a recursive render of all six components. **Neither touches scheduling, HTTP, real
 notifications, or interaction** — those are L1–L5.
 
 `scripts/` is dev-only (not in the published `files` list), so these commands
@@ -105,7 +105,7 @@ the reader. Any blank surface with a console `ReferenceError` fails L1.4 even if
 the others work.
 
 **L1.5 Version.** Settings → Plugins shows `dsh-watchlist` at the version in
-`package.json` (`0.6.0`). A stale version after an edit means the profile link
+`package.json`. A stale version after an edit means the profile link
 points at another copy.
 
 ## 5. L2 — Host tools
@@ -249,8 +249,7 @@ change, wait for a poll or reopen the surface before judging it.
   the row immediately.
 - Default schedule block: 自动巡检 checkbox, 频率, 时间, 回溯天数, 单轮上限, and a
   `下次触发 <timing>` line with task status.
-- 推送: session and macOS checkboxes are live; WeChat is disabled with its
-  explanation. At least one channel always stays selected.
+- 推送: session and macOS checkboxes are live; at least one channel always stays selected.
 - 发一条测试通知 → system notification `关注清单测试通知` (or an inline hint when
   permission is denied / unsupported).
 - 界面语言: 跟随 DSH / 中文 / English; see L3.7.
@@ -408,7 +407,6 @@ digests/
 | --- | --- | --- | --- |
 | `session` | the scheduled session gets the ≤600-character digest | run completes with a summary in that session | agent never prints a summary |
 | `macos` | native notification, one per run | L3.6 | permission denied, channel off, run has no progress |
-| `wechat` | `notify_wechat` message | digest arrives in WeChat | WeChat plugin missing → falls back to the conversation (not an error) |
 
 The run's brief lists the configured channels; the agent must follow it rather
 than its own default.
@@ -441,6 +439,7 @@ was not exercised — say which.
 
 | Date | Version | L0 | L1 | L2 | L3 | L4 | L5 | Notes |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 2026-11-23 | 0.7.1 | pass | partial | not run | not run | not run | not run | L0: smoke + client-check, new case for dropped `wechat`/unknown push channels. L1: Host reloaded, tools registered, `watchlist_settings` prints `推送：session、macos`. L2–L5 not run; the settings page needs a refresh before L3.1 can be judged |
 | 2026-11-23 | 0.7.0 | pass | pass | partial | not run | not run | not run | L0: smoke + client-check, new importance/star/band cases. L1: Host reloaded; `/state` carries `highlights`, `starredIds`, `starred`, `unreadImportant`, and the old entry got a derived id; a `star` → `/state` → `unstar` round-trip worked and was reverted. L2.6.8 and L3 band/star/badge not exercised in the running app |
 | 2026-11-22 | 0.6.0 | pass | pass | partial | not run | not run | not run | baseline: API + `watchlist_list` + `watchlist_schedule sync` verified; 9.1 and 9.2 reproduced |
 
@@ -469,4 +468,3 @@ For a quick "did the last edit break anything" check:
 | Nothing fires on schedule | app closed, task paused, auto-run off, empty list | L2.8, L1.1 |
 | Catch-up never happens | topics not due, no `schedule` service | L2.9, L2.5.3 |
 | Report path wrong / split files | `timeZone` changed mid-day | L2.7, L4 |
-| WeChat push missing | WeChat plugin absent | L5 |

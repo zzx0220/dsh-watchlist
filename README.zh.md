@@ -25,7 +25,7 @@ dsh plugin --profile desktop add /绝对路径/dsh-watchlist
 在任意会话里说：
 
 1. 「帮我加一个关注主题：<某个具体主题>」→ 调用 `watchlist_add`
-2. 「开启每天 8:30 巡检，推微信」→ `watchlist_settings` + `watchlist_schedule sync`
+2. 「开启每天 8:30 巡检，并推一条 macOS 通知」→ `watchlist_settings` + `watchlist_schedule sync`
 3. 「现在跑一次」→ `watchlist_schedule run_now`（或直接让 Agent 执行巡检）
 
 ## 工具
@@ -67,7 +67,7 @@ dsh plugin --profile desktop add /绝对路径/dsh-watchlist
 | `schedule.time` | `08:30` | 执行时刻 |
 | `schedule.weekdays` | `[1]` | 每周几（ISO，1=周一） |
 | `schedule.monthday` | 1 | 每月几号 |
-| `push.channels` | `["session"]` | `session` / `macos` / `wechat` |
+| `push.channels` | `["session"]` | `session` / `macos` |
 | `workspaceDir` | `null` | 巡检会话的工作目录，默认用 Host 默认目录 |
 | `locale` | `auto` | 界面语言：`auto`（跟随 DSH）／`zh`／`en`；其他语言显示英文 |
 | `promptHint` | `true` | 是否在系统提示里加一句提醒，让任意会话的 agent 知道可以用 `watchlist_*` |
@@ -97,8 +97,6 @@ dsh plugin --profile desktop add /绝对路径/dsh-watchlist
 - **Host 必须运行**：调度由 `dsh-schedule` 负责，App 关着不会触发。
 - **启动补检**：错过计划时间（关机／关 App）后重新启动，插件会补投一轮；检索窗口自动取「上次巡检到现在」（最长 30 天），只生成**一份**报告，不按天数补多份。
 - **需要 web 搜索能力**：模型请求里没有 `web_search` 时，巡检只能空跑。
-- **微信推送需要另装微信插件**：本插件只负责在 brief 里告诉 Agent「该推微信」，实际调用
-  `notify_wechat` 由 Agent 完成；没装就退回会话内输出。
 - **macOS 通知由应用内客户端发出**：一次巡检只发一条、仅在本轮有进展时发，点击可直接打开该次报告；
   通知由渲染进程发出（归属 DeepSeek Harness），所以需要 App 在运行、并在 系统设置 → 通知 里允许；
   设置页有「发一条测试通知」按钮可随时验证。

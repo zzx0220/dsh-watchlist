@@ -77,7 +77,6 @@ window.__ModuleLoader__.load({
         langAuto: '跟随 DSH',
         session: '会话内消息',
         macos: '系统通知',
-        wechat: '微信（需微信插件）',
         testNotify: '发一条测试通知',
         testNotifySent: '已发送；看不到请检查 系统设置 → 通知 → DeepSeek Harness',
         testNotifyDenied: '系统拒绝了通知权限，先在 系统设置 → 通知 里打开',
@@ -139,7 +138,6 @@ window.__ModuleLoader__.load({
         langAuto: 'Follow DSH',
         session: 'Session message',
         macos: 'System notification',
-        wechat: 'WeChat (needs plugin)',
         testNotify: 'Send a test notification',
         testNotifySent: 'Sent; if it is missing check System Settings → Notifications → DeepSeek Harness',
         testNotifyDenied: 'Notifications are denied; enable them in System Settings → Notifications',
@@ -897,7 +895,6 @@ window.__ModuleLoader__.load({
               channel === 'session' ? COPY.session : COPY.macos,
             ),
           ),
-          h('label', { className: 'dwl-check dwl-meta' }, h('input', { type: 'checkbox', disabled: true }), COPY.wechat),
         ),
         h(
           'div',

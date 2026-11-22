@@ -51,6 +51,13 @@ try {
     assert.deepEqual(s2.push.channels, ['session', 'macos'])
   })
 
+  check('dropped push channels are filtered out', () => {
+    const mixed = store.normalizeSettings({ push: { channels: ['wechat', 'macos', 'nope'] } })
+    assert.deepEqual(mixed.push.channels, ['macos'])
+    const gone = store.normalizeSettings({ push: { channels: ['wechat'] } })
+    assert.deepEqual(gone.push.channels, ['session'])
+  })
+
   check('topics keep their own cadence', () => {
     const cadenceDir = mkdtempSync(join(tmpdir(), 'watchlist-cadence-'))
     try {

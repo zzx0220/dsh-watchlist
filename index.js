@@ -17,8 +17,7 @@
  *   - Push per channel: session (always available), macOS notification (the
  *     client half posts one native notification per run, only when the run has
  *     progress and only after the run stops being written to; clicking it opens
- *     that day's report), WeChat (the Agent calls notify_wechat; the plugin does
- *     not couple to the WeChat plugin).
+ *     that day's report).
  */
 import { execFile } from 'node:child_process'
 import { existsSync, readFileSync } from 'node:fs'
@@ -41,7 +40,7 @@ const TASK_PROMPT = [
   '3. 每个主题调用一次 watchlist_record：hasUpdate 表示是否有实质新进展；importance 只在确实重大时写 high' +
     '（会改变判断、需要用户行动、或重大突破），常规更新不写。summary 写一句话结论，sources 附标题和链接。',
   '4. 全部主题记录完后，把本轮情况汇总成不超过 600 字的简报。',
-  '5. 按 brief 给出的推送方式推送：含 wechat 且 notify_wechat 可用时调用它发送简报，否则直接在会话里输出。',
+  '5. 按 brief 给出的推送方式推送：把简报输出到会话里；含 macos 时应用内客户端会另发一条系统通知。',
   '只做检索、记录、推送；不要下载文件、不要安装软件、不要改清单以外的文件。',
 ].join('\n')
 

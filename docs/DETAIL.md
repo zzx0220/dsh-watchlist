@@ -15,10 +15,9 @@ progress, write it down, and push a summary.
    record may carry `importance: "high"` when the news changes the picture or needs an
    action; ordinary updates leave it out, so the flag keeps its meaning.
 4. The agent summarizes the run and pushes it according to the brief: in the
-   conversation, or through `notify_wechat` when the WeChat plugin is installed.
-   With the macOS channel on, the client half posts one native notification per
-   run by itself — only when the run has progress, only after the run stops being
-   written to, and clicking it opens that run's report.
+   conversation. With the macOS channel on, the client half posts one native
+   notification per run by itself — only when the run has progress, only after the
+   run stops being written to, and clicking it opens that run's report.
 
 ## Where it shows up
 

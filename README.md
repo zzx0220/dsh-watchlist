@@ -29,7 +29,7 @@ dsh plugin --profile desktop add /absolute/path/dsh-watchlist
 In any conversation:
 
 1. "Add a topic: <something specific>" → `watchlist_add`
-2. "Run the check every day at 08:30 and push to WeChat" → `watchlist_settings`
+2. "Run the check every day at 08:30 and notify me on macOS" → `watchlist_settings`
    then `watchlist_schedule sync`
 3. "Run it now" → `watchlist_schedule run_now`
 
@@ -75,7 +75,7 @@ initial value, runtime changes win and survive upgrades.
 | `schedule.time` | `08:30` | Run time |
 | `schedule.weekdays` | `[1]` | ISO weekdays for weekly runs |
 | `schedule.monthday` | 1 | Day of month for monthly runs |
-| `push.channels` | `["session"]` | `session` / `macos` / `wechat` |
+| `push.channels` | `["session"]` | `session` / `macos` |
 | `workspaceDir` | `null` | Working directory for the scheduled session |
 | `locale` | `auto` | UI language: `auto` (follow DSH), `zh`, or `en`; other locales show English |
 | `promptHint` | `true` | Adds one line to the system prompt so agents in any session know `watchlist_*` exists |
@@ -108,8 +108,6 @@ initial value, runtime changes win and survive upgrades.
   plugin delivers one catch-up run whose search window spans "last run → now"
   (capped at 30 days), producing a single report rather than one per day.
 - **Needs web search**: without `web_search` in the model request, a run is empty.
-- **WeChat needs the WeChat plugin**: this plugin only tells the Agent to call
-  `notify_wechat`; without it the digest stays in the conversation.
 - **macOS notifications come from the in-app client**: one per run, only when the
   run has progress, and clicking it opens that run's report. They are posted by
   the renderer (attributed to DeepSeek Harness), so the app must be running and
