@@ -13,7 +13,7 @@
  *     notify_wechat，插件不耦合微信插件）。
  */
 import { execFile } from 'node:child_process'
-import { existsSync, readFileSync, copyFileSync, mkdirSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join, resolve, sep } from 'node:path'
 import { defineTool } from '@deepseek-ai/dsh-tools'
@@ -28,10 +28,10 @@ const TASK_TITLE = '关注清单巡检'
 const TASK_PROMPT = [
   '【关注清单巡检】',
   '这是一次定期的关注清单巡检，请按以下步骤执行：',
-  '1. 调用 watchlist_run_brief，取得本次要追踪的主题、回溯天数和推送方式。',
-  '2. 对每个主题用 web_search 检索回溯窗口内的新进展；需要确认细节时用 web_fetch 打开原文。只采信带日期的来源。',
+  '1. 调用 watchlist_run_brief，取得本次要追踪的主题、检索窗口（上次巡检到现在）和推送方式。',
+  '2. 对每个主题用 web_search 检索该窗口内的新进展；需要确认细节时用 web_fetch 打开原文。只采信带日期的来源。',
   '3. 每个主题调用一次 watchlist_record：hasUpdate 表示是否有实质新进展，summary 写一句话结论，sources 附标题和链接。',
-  '4. 全部主题记录完后，把今天的情况汇总成不超过 600 字的简报。',
+  '4. 全部主题记录完后，把本轮情况汇总成不超过 600 字的简报。',
   '5. 按 brief 给出的推送方式推送：含 wechat 且 notify_wechat 可用时调用它发送简报，否则直接在会话里输出。',
   '只做检索、记录、推送；不要下载文件、不要安装软件、不要改清单以外的文件。',
 ].join('\n')
@@ -106,21 +106,6 @@ export function apply(ctx, config) {
 
   const settingsOf = () => store.loadSettings(dataDir, config)
 
-  /** 工作区镜像：日报在 workspace 内才会被 DSH 的文档预览认作可 stat 的文件。 */
-  const mirrorTarget = (settings, day) => {
-    const dir = expandHome(settings.mirrorDir)
-    if (!dir) return null
-    return join(dir, 'digests', `${day}.md`)
-  }
-  const writeMirror = (settings, day) => {
-    const target = mirrorTarget(settings, day)
-    if (!target) return null
-    const source = join(dataDir, 'digests', `${day}.md`)
-    if (!existsSync(source)) return null
-    mkdirSync(join(expandHome(settings.mirrorDir), 'digests'), { recursive: true })
-    copyFileSync(source, target)
-    return target
-  }
   const scheduleService = () => {
     try {
       return typeof ctx.get === 'function' ? ctx.get('schedule') : ctx.schedule
@@ -177,8 +162,26 @@ export function apply(ctx, config) {
     if (attempt < 6) timers.push(setTimeout(() => whenService(name, run, attempt + 1), 1500 * (attempt + 1)))
   }
 
-  whenService('schedule', () => {
-    if (settingsOf().schedule.enabled) ensureTask(false).catch(() => {})
+  const RUN_INTERVAL_MS = { daily: 86400000, weekly: 7 * 86400000, monthly: 30 * 86400000 }
+  const overdue = (settings) => {
+    const last = store.loadState(dataDir).lastRunAt
+    if (!last) return false
+    const gap = Date.now() - new Date(last).getTime()
+    const interval = RUN_INTERVAL_MS[settings.schedule.frequency] ?? RUN_INTERVAL_MS.daily
+    return gap > interval + 60 * 60 * 1000
+  }
+
+  whenService('schedule', (schedule) => {
+    const settings = settingsOf()
+    if (!settings.schedule.enabled) return
+    ensureTask(false)
+      .then((task) => {
+        if (!task || !task.taskId) return undefined
+        if (!overdue(settings)) return undefined
+        // 关机/关 App 错过计划时间：启动后补投一轮，窗口由 brief 按「上次巡检到现在」计算。
+        return Promise.resolve(schedule.run({ id: task.taskId })).catch(() => undefined)
+      })
+      .catch(() => undefined)
   })
 
   /* ---------- 给 Client 半用的本机 HTTP 接口（仅回环） ---------- */
@@ -247,10 +250,7 @@ export function apply(ctx, config) {
           timing: describeTiming(buildTiming(settings)),
           task,
         },
-        digests: store.groupDigests(dataDir, 14).map((group) => ({
-          ...group,
-          openPath: mirrorTarget(settings, group.day) || group.path,
-        })),
+        runs: store.listRuns(dataDir, 14),
         unread: store.unreadCount(dataDir),
         lastSeenAt: state.lastSeenAt ?? null,
       }
@@ -306,28 +306,19 @@ export function apply(ctx, config) {
             return sendJson(res, 200, { ok: true, settings, note })
           }
           if (type === 'read') {
-            const day = String(body.day ?? '').trim()
-            if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return sendJson(res, 400, { ok: false, error: '日期格式应为 YYYY-MM-DD' })
-            const file = join(dataDir, 'digests', `${day}.md`)
-            if (!existsSync(file)) return sendJson(res, 404, { ok: false, error: `没有 ${day} 的日报文件` })
-            return sendJson(res, 200, { ok: true, day, text: readFileSync(file, 'utf8') })
-          }
-          if (type === 'mirror') {
-            const settings = settingsOf()
-            if (!expandHome(settings.mirrorDir)) return sendJson(res, 400, { ok: false, error: '先在设置里指定 mirrorDir' })
-            let count = 0
-            for (const group of store.groupDigests(dataDir, 999)) {
-              if (writeMirror(settings, group.day)) count += 1
-            }
-            return sendJson(res, 200, { ok: true, count, dir: expandHome(settings.mirrorDir) })
+            const runId = String(body.runId ?? '').trim()
+            if (!/^run-\d{8}T\d{6}Z(?:-\d+)?$/.test(runId)) return sendJson(res, 400, { ok: false, error: 'runId 格式不对' })
+            const file = join(dataDir, 'digests', `${runId}.md`)
+            if (!existsSync(file)) return sendJson(res, 404, { ok: false, error: `没有 ${runId} 的报告文件` })
+            return sendJson(res, 200, { ok: true, runId, text: readFileSync(file, 'utf8') })
           }
           if (type === 'open') {
             const root = join(dataDir, 'digests')
             let file = null
-            if (body.day !== undefined && String(body.day).trim()) {
-              const day = String(body.day).trim()
-              if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return sendJson(res, 400, { ok: false, error: '日期格式应为 YYYY-MM-DD' })
-              file = join(root, `${day}.md`)
+            if (body.runId !== undefined && String(body.runId).trim()) {
+              const runId = String(body.runId).trim()
+              if (!/^run-\d{8}T\d{6}Z(?:-\d+)?$/.test(runId)) return sendJson(res, 400, { ok: false, error: 'runId 格式不对' })
+              file = join(root, `${runId}.md`)
             } else if (body.path !== undefined && String(body.path).trim()) {
               file = resolve(String(body.path).trim())
             }
@@ -445,30 +436,49 @@ export function apply(ctx, config) {
   tool({
     name: 'watchlist_run_brief',
     description:
-      '巡检开始时调用：返回本次要追踪的主题、回溯天数、推送方式和落盘位置。会按 maxTopicsPerRun 截断并提示。' +
-      '这是"该搜什么"的唯一权威来源，不要自己猜主题。',
+      '巡检开始时调用：开一次巡检，返回本次要追踪的主题、检索窗口（从上次巡检到现在）、推送方式和落盘位置。' +
+      '这是"该搜什么、搜哪段时间"的唯一权威来源，不要自己猜。',
     parameters: {},
     output: { schema: { type: 'json' }, render: (_args, value) => text(value) },
     async execute() {
       const settings = settingsOf()
+      const now = Date.now()
+      const state = store.loadState(dataDir)
+      const current = store.currentRun(dataDir)
+      if (current && now - new Date(current.startedAt).getTime() < 30 * 60 * 1000) {
+        return {
+          message: '刚刚已经开过一次巡检（30 分钟内），本轮跳过，避免重复劳动。',
+          skip: true,
+          runId: current.id,
+          dataDir,
+        }
+      }
+      store.closeCurrentRun(dataDir)
       const topics = store.loadTopics(dataDir)
       const limited = topics.slice(0, settings.maxTopicsPerRun)
-      const today = store.dayStamp(settings.timeZone)
+      const capDays = 30
+      const fallback = now - settings.lookbackDays * 86400000
+      const lastAt = state.lastRunAt ? new Date(state.lastRunAt).getTime() : NaN
+      const fromMs = Math.max(Number.isFinite(lastAt) ? lastAt : fallback, now - capDays * 86400000)
+      const run = store.startRun(dataDir, { from: new Date(fromMs).toISOString(), to: new Date(now).toISOString() })
+      const coversDays = Math.max(1, Math.round((now - fromMs) / 86400000))
       const lines = limited.length
-        ? limited.map((t, i) => `${i + 1}. ${t.topic}（id: ${t.id}）${t.keywords.length ? `｜关键词：${t.keywords.join(' / ')}` : ''}${t.note ? `｜关注点：${t.note}` : ''}`)
+        ? limited.map((t, i) => `${i + 1}. ${t.topic}（id: ${t.id}）${t.keywords.length ? `｜关键词：${t.keywords.join(' / ')}` : ''}${t.note ? `｜关注点：${String(t.note).replace(/^关注点[:：]\s*/, '')}` : ''}`)
         : ['（清单为空，本次无事可做：直接回复"关注清单是空的"）']
       return {
         message: [
-          `本次巡检：${today}，回溯 ${settings.lookbackDays} 天，推送 ${settings.push.channels.join('、') || '无'}`,
+          `本次巡检 ${store.formatStamp(run.startedAt)}，检索窗口 ${store.formatStamp(run.from)} → 现在（约 ${coversDays} 天），推送 ${settings.push.channels.join('、') || '无'}`,
           ...lines,
           topics.length > limited.length ? `（还有 ${topics.length - limited.length} 个主题本轮跳过，下次轮到）` : null,
-          `落盘：每个主题用 watchlist_record 记录，日报会写到 ${join(dataDir, 'digests')}`,
+          `落盘：每个主题调用一次 watchlist_record；本轮报告写到 ${join(dataDir, 'digests', `${run.id}.md`)}`,
         ]
           .filter(Boolean)
           .join('\n'),
-        date: today,
+        runId: run.id,
+        from: run.from,
+        to: run.to,
+        coversDays,
         dataDir,
-        lookbackDays: settings.lookbackDays,
         timeZone: settings.timeZone,
         push: settings.push.channels,
         topics: limited.map((t) => ({ id: t.id, topic: t.topic, keywords: t.keywords, note: t.note })),
@@ -479,7 +489,7 @@ export function apply(ctx, config) {
   tool({
     name: 'watchlist_record',
     description:
-      '记录一个主题本次的巡检结果：追加到当天的日报文件。每个主题每次巡检调用一次；' +
+      '记录一个主题本次的巡检结果：追加到本轮巡检的报告文件（每轮一份，不按天）。每个主题每次巡检调用一次；' +
       'hasUpdate 为真表示有实质新进展。sources 每行一个来源，写成「标题 - 链接」。',
     parameters: {
       topic: { type: 'string', required: true, description: '主题 id 或主题名，来自 watchlist_run_brief' },
@@ -498,8 +508,7 @@ export function apply(ctx, config) {
         topics.find((t) => store.normalizeName(t.topic) === store.normalizeName(raw)) ||
         topics.find((t) => store.normalizeName(t.topic).includes(store.normalizeName(raw)))
       if (!hit) return { message: `清单里没有「${raw}」，先 watchlist_add 再加记录`, recorded: false }
-      const result = store.recordDigest(dataDir, {
-        timeZone: settings.timeZone,
+      const result = store.appendRunEntry(dataDir, {
         topic: hit.topic,
         hasUpdate: args.hasUpdate === true,
         summary: args.summary,
@@ -507,18 +516,15 @@ export function apply(ctx, config) {
         note: args.note,
       })
       store.touchTopics(dataDir, [hit.id])
-      store.saveState(dataDir, { lastRunAt: new Date().toISOString() })
-      const mirrored = writeMirror(settings, result.day)
       if (args.hasUpdate === true && settings.push.channels.includes('macos')) {
         notifyMacos('关注清单：有新进展', `${hit.topic}：${String(args.summary).slice(0, 120)}`)
       }
       return {
-        message: `已记录「${hit.topic}」→ ${result.path}（今日第 ${result.dayTotal} 条）${mirrored ? `，已镜像到 ${mirrored}` : ''}`,
+        message: `已记录「${hit.topic}」→ ${result.path}（本轮第 ${result.runTotal} 条）`,
         recorded: true,
         path: result.path,
-        mirror: mirrored,
-        day: result.day,
-        dayTotal: result.dayTotal,
+        runId: result.runId,
+        runTotal: result.runTotal,
       }
     },
   })

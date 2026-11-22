@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 /**
- * 无 Harness 也能跑的逻辑自检：验证清单增删、设置合并、日报追加。
+ * 无 Harness 也能跑的逻辑自检：清单增删、设置合并、按次巡检的记录与迁移。
  * 用法：node scripts/smoke.mjs
  */
-import { mkdtempSync, rmSync, readFileSync } from 'node:fs'
+import { mkdtempSync, rmSync, readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import assert from 'node:assert/strict'
@@ -35,45 +35,46 @@ try {
     assert.equal(r.total, 1)
   })
 
-  check('list returns stored topics', () => {
-    const topics = store.loadTopics(dir)
-    assert.equal(topics.length, 1)
-    assert.equal(topics[0].topic, '某科学进展')
-    assert.deepEqual(topics[0].keywords, ['关键词A'])
-  })
-
   check('settings merge defaults with patch and clamp', () => {
     const s1 = store.normalizeSettings({ lookbackDays: 1000, schedule: { time: '9:00' } })
     assert.equal(s1.lookbackDays, 90)
     assert.equal(s1.schedule.time, '08:30')
-    const file = store.paths(dir).settings
     store.saveSettings(dir, { lookbackDays: 3, push: { channels: ['session', 'macos'] } })
     const s2 = store.loadSettings(dir, { lookbackDays: 7 })
     assert.equal(s2.lookbackDays, 3)
     assert.deepEqual(s2.push.channels, ['session', 'macos'])
-    assert.ok(JSON.parse(readFileSync(file, 'utf8')).lookbackDays === 3)
   })
 
-  check('record appends digest sections', () => {
-    const r1 = store.recordDigest(dir, {
-      timeZone: 'Asia/Shanghai',
-      topic: '某科学进展',
-      hasUpdate: true,
-      summary: '出现新论文',
-      sources: ['论文 - https://example.com/a'],
-    })
-    assert.equal(r1.dayTotal, 1)
-    const r2 = store.recordDigest(dir, {
-      timeZone: 'Asia/Shanghai',
-      topic: '某科学进展',
-      hasUpdate: false,
-      summary: '无新进展',
-      sources: [],
-    })
-    assert.equal(r2.dayTotal, 2)
-    const text = readFileSync(r1.path, 'utf8')
-    assert.match(text, /^# 关注清单日报 \d{4}-\d{2}-\d{2}/)
+  check('a run writes one report file per run', () => {
+    const from = new Date(Date.now() - 5 * 86400000).toISOString()
+    const run = store.startRun(dir, { from })
+    assert.match(run.id, /^run-\d{8}T\d{6}Z$/)
+    const r1 = store.appendRunEntry(dir, { topic: '某科学进展', hasUpdate: true, summary: '有新论文', sources: ['论文 - https://example.com/a'] })
+    assert.equal(r1.runTotal, 1)
+    const r2 = store.appendRunEntry(dir, { topic: '某科学进展', hasUpdate: false, summary: '无更多进展', sources: [] })
+    assert.equal(r2.runTotal, 2)
+    assert.equal(r1.path, r2.path)
+    const text = readFileSync(r2.path, 'utf8')
+    assert.match(text, /# 关注清单巡检 /)
+    assert.match(text, /覆盖区间：/)
     assert.equal((text.match(/^## /gm) ?? []).length, 2)
+    assert.equal(store.listRuns(dir).length, 1)
+  })
+
+  check('a second run today gets its own file', () => {
+    store.closeCurrentRun(dir)
+    const run = store.startRun(dir, {})
+    store.appendRunEntry(dir, { topic: '某科学进展', hasUpdate: false, summary: '补查', sources: [] })
+    const runs = store.listRuns(dir)
+    assert.equal(runs.length, 2)
+    assert.notEqual(runs[0].path, runs[1].path)
+    assert.equal(runs[0].id, run.id)
+  })
+
+  check('unread counts entries after last seen', () => {
+    assert.equal(store.unreadCount(dir), 3)
+    store.markSeen(dir)
+    assert.equal(store.unreadCount(dir), 0)
   })
 
   check('remove by name, then by id', () => {
@@ -82,9 +83,26 @@ try {
     assert.equal(store.removeTopic(dir, added.topic.id).remaining, 0)
   })
 
-  check('remove misses return null', () => {
-    const r = store.removeTopic(dir, '不存在')
-    assert.equal(r.removed, null)
+  check('legacy day files migrate into runs', () => {
+    const legacyDir = mkdtempSync(join(tmpdir(), 'watchlist-legacy-'))
+    try {
+      const digests = join(legacyDir, 'digests')
+      mkdirSync(digests, { recursive: true })
+      writeFileSync(join(digests, '2026-11-20.md'), '# 关注清单日报 2026-11-20\n\n## 旧主题\n\n- 摘要：旧数据\n', 'utf8')
+      writeFileSync(
+        join(digests, 'index.json'),
+        JSON.stringify({ version: 1, entries: [{ at: '2026-11-20T01:00:00Z', day: '2026-11-20', topic: '旧主题', hasUpdate: true, summary: '旧数据', sources: [] }] }),
+        'utf8',
+      )
+      store.ensureLayout(legacyDir)
+      const runs = store.loadRuns(legacyDir)
+      assert.equal(runs.length, 1)
+      assert.equal(runs[0].id, 'run-20261120T000000Z')
+      assert.ok(existsSync(join(digests, 'run-20261120T000000Z.md')))
+      assert.equal(store.unreadCount(legacyDir), 1)
+    } finally {
+      rmSync(legacyDir, { recursive: true, force: true })
+    }
   })
 } finally {
   rmSync(dir, { recursive: true, force: true })

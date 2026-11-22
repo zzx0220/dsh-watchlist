@@ -622,9 +622,9 @@ window.__ModuleLoader__.load({
     const DIGEST_TAB = 'dsh-watchlist/digest'
 
     /** 右侧栏日报标签页的当前日期；标签页内容自己订阅它，不依赖 tab 参数。 */
-    const digestTab = { day: null, listeners: new Set() }
-    function setDigestDay(day) {
-      digestTab.day = day
+    const digestTab = { runId: null, listeners: new Set() }
+    function setDigestDay(runId) {
+      digestTab.runId = runId
       for (const listener of digestTab.listeners) listener()
     }
     function useDigestDay() {
@@ -634,15 +634,15 @@ window.__ModuleLoader__.load({
         digestTab.listeners.add(listener)
         return () => digestTab.listeners.delete(listener)
       }, [])
-      return digestTab.day
+      return digestTab.runId
     }
 
     /** 在右侧栏打开插件自己的标签页（不经过文件预览，因此与工作区无关）。 */
-    function openDigestTab(day) {
+    function openDigestTab(runId) {
       try {
         const sidebar = services && services.sidebarRight
         if (!sidebar || typeof sidebar.openTab !== 'function') return 'nohost'
-        setDigestDay(day)
+        setDigestDay(runId)
         sidebar.openTab('watchlist-digest', {})
         try {
           if (services.layout && typeof services.layout.openRightbar === 'function') services.layout.openRightbar(true, false)
@@ -657,15 +657,15 @@ window.__ModuleLoader__.load({
 
     function DigestTab() {
       useLang()
-      const day = useDigestDay()
+      const runId = useDigestDay()
       const [text, setText] = useState('')
       const [error, setError] = useState('')
       useEffect(() => {
-        if (!day) return undefined
+        if (!runId) return undefined
         let alive = true
         setText('')
         setError('')
-        act('read', { day })
+        act('read', { runId })
           .then((result) => {
             if (!alive) return
             if (result && result.ok) setText(result.text)
@@ -677,7 +677,7 @@ window.__ModuleLoader__.load({
         return () => {
           alive = false
         }
-      }, [day])
+      }, [runId])
       return h(
         'div',
         { className: 'dwl', style: { height: '100%', overflow: 'auto', padding: '10px 14px', boxSizing: 'border-box' } },
@@ -685,19 +685,30 @@ window.__ModuleLoader__.load({
         h(
           'div',
           { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, marginBottom: 10 } },
-          h('div', { style: { fontWeight: 600 } }, `${COPY.title} · ${day || ''}`),
+          h('div', { style: { fontWeight: 600 } }, `${COPY.title} · ${fmt(runId)}`),
           h(
             'div',
             { style: { display: 'flex', gap: 8 } },
-            h('button', { className: 'dwl-btn', onClick: () => act('open', { day }) }, COPY.openFile),
+            h('button', { className: 'dwl-btn', onClick: () => act('open', { runId }) }, COPY.openFile),
           ),
         ),
         error ? h('div', { className: 'dwl-err' }, error) : text ? h(Markdown, { text }) : h('div', { className: 'dwl-meta' }, COPY.loading),
       )
     }
 
+    /** run-20261122T140500Z → 2026-11-22 14:05（本地时间）；其它输入原样返回。 */
+    function fmt(value) {
+      const text = String(value || '')
+      const match = /^run-(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})/.exec(text)
+      if (match) return `${match[1]}-${match[2]}-${match[3]} ${match[4]}:${match[5]}`
+      const date = new Date(text)
+      if (!text || Number.isNaN(date.getTime())) return text || '—'
+      const pad = (n) => String(n).padStart(2, '0')
+      return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`
+    }
+
     function Panel({ state, onClose }) {
-      const days = (state && state.digests) || []
+      const runs = (state && state.runs) || []
       const fallback = (state && state.openSessionId) || (state && state.schedule && state.schedule.task && state.schedule.task.sessionId)
       return h(
         'div',
@@ -709,19 +720,23 @@ window.__ModuleLoader__.load({
           h('h4', { style: { margin: 0 } }, COPY.title),
           h('button', { className: 'dwl-btn', onClick: onClose }, COPY.close),
         ),
-        days.length
-          ? days.slice(0, 3).map((group) =>
+        runs.length
+          ? runs.slice(0, 3).map((run) =>
               h(
                 'div',
-                { key: group.day, style: { marginBottom: 10 } },
-                h('div', { className: 'dwl-meta', style: { margin: '2px 0 4px' } }, `${group.day} · ${group.entries.length}`),
-                group.entries.slice(0, 5).map((entry, index) =>
+                { key: run.id, style: { marginBottom: 10 } },
+                h(
+                  'div',
+                  { className: 'dwl-meta', style: { margin: '2px 0 4px' } },
+                  `${fmt(run.startedAt)} · ${run.entries.length}${zh() ? ' 条' : ''}`,
+                ),
+                run.entries.slice(0, 5).map((entry, index) =>
                   h(
                     'button',
                     {
                       key: `${entry.at}-${index}`,
                       className: 'dwl-entry',
-                      onClick: () => openReader({ day: group.day, path: group.openPath || group.path, fallback }),
+                      onClick: () => openReader({ runId: run.id, path: run.path, from: run.from, to: run.to, fallback }),
                     },
                     h('div', null, entry.topic),
                     h('div', { className: 'dwl-meta' }, entry.summary),
@@ -743,7 +758,7 @@ window.__ModuleLoader__.load({
         let alive = true
         setText('')
         setError('')
-        act('read', { day: view.day })
+        act('read', { runId: view.runId })
           .then((result) => {
             if (!alive) return
             if (result && result.ok) setText(result.text)
@@ -755,7 +770,7 @@ window.__ModuleLoader__.load({
         return () => {
           alive = false
         }
-      }, [view.day])
+      }, [view.runId])
       return h(
         'div',
         { className: 'dwl dwl-reader', role: 'dialog', 'aria-label': COPY.title },
@@ -766,7 +781,7 @@ window.__ModuleLoader__.load({
           h(
             'div',
             { style: { minWidth: 0 } },
-            h('div', { style: { fontWeight: 600 } }, `${COPY.title} · ${view.day}`),
+            h('div', { style: { fontWeight: 600 } }, `${COPY.title} · ${fmt(view.from || view.startedAt)} → ${fmt(view.to)}`),
             h('div', { className: 'dwl-src' }, view.path || ''),
           ),
           h(
@@ -777,14 +792,14 @@ window.__ModuleLoader__.load({
               {
                 className: 'dwl-btn',
                 onClick: () => {
-                  const result = openDigestTab(view.day)
+                  const result = openDigestTab(view.runId)
                   if (result === 'ok') closeReader()
                   else setNotice(`${zh() ? '打开失败' : 'Failed'}：${result}`)
                 },
               },
               COPY.openSidebar,
             ),
-            h('button', { className: 'dwl-btn', onClick: () => act('open', { day: view.day }) }, COPY.openFile),
+            h('button', { className: 'dwl-btn', onClick: () => act('open', { runId: view.runId }) }, COPY.openFile),
             h('button', { className: 'dwl-btn', onClick: closeReader }, COPY.close),
           ),
         ),

@@ -68,13 +68,17 @@ initial value, runtime changes win and survive upgrades.
 ├── settings.json
 ├── state.json
 └── digests/
-    └── 2026-11-22.md
+    ├── runs.json
+    └── run-20261122T140500Z.md
 ```
 
 ## Limitations
 
 - **The Host must be running**: scheduling belongs to `dsh-schedule`; a closed app
-  does not fire, and a restart only catches the latest missed occurrence.
+  does not fire.
+- **Startup catch-up**: after a missed schedule (powered off or app closed), the
+  plugin delivers one catch-up run whose search window spans "last run → now"
+  (capped at 30 days), producing a single report rather than one per day.
 - **Needs web search**: without `web_search` in the model request, a run is empty.
 - **WeChat needs the WeChat plugin**: this plugin only tells the Agent to call
   `notify_wechat`; without it the digest stays in the conversation.

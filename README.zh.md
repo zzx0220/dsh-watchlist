@@ -62,14 +62,16 @@ dsh plugin --profile desktop add /绝对路径/dsh-watchlist
 <dataDir>/
 ├── topics.json     # 主题
 ├── settings.json   # 运行期设置
-├── state.json      # 调度任务 id、最近巡检时间
+├── state.json      # 调度任务 id、最近巡检时间、当前 run
 └── digests/
-    └── 2026-11-22.md
+    ├── runs.json                       # 巡检索引（机读）
+    └── run-20261122T140500Z.md         # 每次巡检一份报告（不按天）
 ```
 
 ## 限制
 
-- **Host 必须运行**：调度由 `dsh-schedule` 负责，App 关着不会触发；重启后只补最近一次。
+- **Host 必须运行**：调度由 `dsh-schedule` 负责，App 关着不会触发。
+- **启动补检**：错过计划时间（关机／关 App）后重新启动，插件会补投一轮；检索窗口自动取「上次巡检到现在」（最长 30 天），只生成**一份**报告，不按天数补多份。
 - **需要 web 搜索能力**：模型请求里没有 `web_search` 时，巡检只能空跑。
 - **微信推送需要另装微信插件**：本插件只负责在 brief 里告诉 Agent「该推微信」，实际调用
   `notify_wechat` 由 Agent 完成；没装就退回会话内输出。
