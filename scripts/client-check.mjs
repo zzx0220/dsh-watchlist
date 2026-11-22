@@ -260,8 +260,8 @@ const run = STATE.runs[0]
 active = 'en'
 for (const fn of subs) fn()
 const cases = [
-  ['main page', 'main#watchlist', {}, ['主题A', '2026-11-22', 'Next run', '2 new', 'Mark all read', 'unread']],
-  ['settings section', 'settings.section#watchlist', {}, ['主题A', 'Mark all read']],
+  ['main page', 'main#watchlist', {}, ['主题A', '2026-11-22', 'Next run', '2 new', 'Mark all read', 'Mark all unread', 'Mark read', 'unread']],
+  ['settings section', 'settings.section#watchlist', {}, ['主题A', 'Mark all read', 'Mark all unread']],
   ['nav icon', 'sidebar.panellist#watchlist', { size: 16, active: false }, []],
   ['reader', 'shell.overlay#watchlist-overlay', {}, ['状态：有实质进展']],
 ]

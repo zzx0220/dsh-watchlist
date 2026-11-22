@@ -250,7 +250,7 @@ change, wait for a poll or reopen the surface before judging it.
 - 发一条测试通知 → system notification `关注清单测试通知` (or an inline hint when
   permission is denied / unsupported).
 - 界面语言: 跟随 DSH / 中文 / English; see L3.7.
-- 全部已读 beside the topic count clears every unread report at once.
+- 全部已读 beside the topic count clears every unread report; 全部未读 puts them all back.
 - Save feedback: no red error line; the change survives a page reload.
 - The time field patches on every keystroke; an invalid intermediate value falls
   back to `08:30`, so clear it, type the full `HH:MM`, then confirm
@@ -274,7 +274,8 @@ change, wait for a poll or reopen the surface before judging it.
 ### L3.3 Main page (the whole list)
 
 - Header: eyebrow label, title, one-line subtitle, `立即运行一次`, an
-  `N 条新进展` chip while progress is unread, and a `全部已读` button beside it.
+  `N 条新进展` chip while progress is unread, and `全部已读` (only while something is
+  unread) plus `全部未读` beside it.
 - One read-only status line under the header: auto-run dot with 开/关,
   `下次触发 …`, the push channels in use, and the
   `巡检设置：设置 → 关注清单` hint. It carries **no controls** — this page edits
@@ -284,9 +285,11 @@ change, wait for a poll or reopen the surface before judging it.
 - Reports card: one block per day file, header `YYYY-MM-DD` and `N 次巡检 · M 条`,
   then one row per topic that opens the reader for that file. Empty state
   `还没有巡检记录。`.
-- A report not yet read carries a `未读` tag with a dot on its run line (the run line
-  appears for a multi-run day, or whenever the run is unread), and the tag disappears
-  for that run only after its report is opened.
+- Every report has its own line: time, a `未读` tag with a dot when unread, and a
+  per-report toggle — `标为已读` on an unread report, `标为未读` on a read one. Toggling
+  one moves the badge by that report's entries only, the way a mail row does.
+- Opening a report marks that report read; `全部已读` and `全部未读` on the page and in
+  Settings flip every report at once.
 - Schedule, push and language controls appear only in Settings → Watchlist; if
   they show up here as well, this case fails (duplication was removed on purpose).
 - The page scrolls inside the centre column; the header stays put and nothing
@@ -311,8 +314,8 @@ change, wait for a poll or reopen the surface before judging it.
   page/settings sections refetch on a shared data revision, so the `未读` tags of the
   report just read disappear while the reader is still open. An older `/state`
   response landing late must not resurrect the count (overlapping reads are ordered).
-- `全部已读` clears the badge immediately, without closing the page or waiting for a
-  poll.
+- `全部已读` and `全部未读` clear or refill the badge immediately, without closing the
+  page or waiting for a poll.
 - Live badge: sit in a conversation with the watchlist page closed, then let a run
   record progress (or `watchlist_record` from the agent). Within about five seconds
   the sidebar badge appears without any navigation — the client polls

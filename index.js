@@ -313,16 +313,20 @@ export function apply(ctx, config) {
         const body = await readBody(req)
         const type = String(body.type ?? '')
         try {
-          if (type === 'seen') {
-            // No runId means "mark everything read"; one runId clears only that report.
+          if (type === 'seen' || type === 'unseen') {
+            // No runId means "every report"; one runId touches only that report. The
+            // write is the only difference, so both actions answer with the new counts.
             const runId = body.runId === undefined || body.runId === null ? '' : String(body.runId).trim()
+            if (runId && !RUN_ID_RE.test(runId)) return sendJson(res, 400, { ok: false, error: 'runId 格式不对' })
+            const mark = type === 'seen'
             if (runId) {
-              if (!RUN_ID_RE.test(runId)) return sendJson(res, 400, { ok: false, error: 'runId 格式不对' })
-              store.markRunSeen(dataDir, runId)
-            } else {
+              if (mark) store.markRunSeen(dataDir, runId)
+              else store.markRunUnseen(dataDir, runId)
+            } else if (mark) {
               store.markSeen(dataDir)
+            } else {
+              store.markAllUnseen(dataDir)
             }
-            // Answer with the new counts so the badge can move without a second round trip.
             return sendJson(res, 200, { ok: true, ...store.counters(dataDir) })
           }
           if (type === 'add') {

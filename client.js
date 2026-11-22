@@ -91,6 +91,9 @@ window.__ModuleLoader__.load({
         never: '尚未巡检',
         newUpdates: '条新进展',
         markAllRead: '全部已读',
+        markAllUnread: '全部未读',
+        markRead: '标为已读',
+        markUnread: '标为未读',
         unreadReport: '未读',
         close: '关闭',
         entryHint: '点条目直接阅读',
@@ -145,6 +148,9 @@ window.__ModuleLoader__.load({
         never: 'never',
         newUpdates: 'new',
         markAllRead: 'Mark all read',
+        markAllUnread: 'Mark all unread',
+        markRead: 'Mark read',
+        markUnread: 'Mark unread',
         unreadReport: 'unread',
         close: 'Close',
         entryHint: 'Click an entry to read',
@@ -535,6 +541,11 @@ window.__ModuleLoader__.load({
         font-size: 11px; color: var(--dsw-alias-label-secondary, #666);
         background: var(--dsw-alias-bg-layer-2, rgba(0,0,0,.02));
         border-top: 1px solid var(--dsw-alias-border-l1, rgba(0,0,0,.06)); }
+      .dwlp-runbtn { margin-left: auto; border: 0; background: none; cursor: pointer; font: inherit;
+        font-size: 11px; padding: 1px 6px; border-radius: 6px;
+        color: var(--dsw-alias-label-secondary, #777); }
+      .dwlp-runbtn:hover { background: var(--dsw-alias-interactive-bg-hover, rgba(0,0,0,.06));
+        color: var(--dsw-alias-label-primary, #111); }
       .dwlp-unread { position: relative; padding-left: 9px; color: var(--dsw-alias-link, #2b6cf6); font-weight: 600; }
       .dwlp-unread::before { content: ''; position: absolute; left: 0; top: 50%; width: 5px; height: 5px;
         margin-top: -2.5px; border-radius: 50%; background: var(--dsw-alias-link, #2b6cf6); }
@@ -924,7 +935,7 @@ window.__ModuleLoader__.load({
     }
 
     /** Reports grouped by day file; one entry per topic, clicking opens the reader. */
-    function HistorySection({ state }) {
+    function HistorySection({ state, run }) {
       const groups = groupRunsByFile((state && state.runs) || [])
       const unread = new Set((state && state.unreadRunIds) || [])
       if (!groups.length) return h('div', { className: 'dwlp-empty' }, COPY.noDigest)
@@ -945,17 +956,26 @@ window.__ModuleLoader__.load({
                 `${group.runs.length}${zh() ? ' 次巡检' : group.runs.length === 1 ? ' run' : ' runs'} · ${group.entries}${zh() ? ' 条' : ''}`,
               ),
             ),
-            group.runs.flatMap((runRecord, runIndex) => [
-              runRecord.entries.length && (group.runs.length > 1 || unread.has(runRecord.id))
-                ? h(
-                    'div',
-                    { key: `${runRecord.id}-head`, className: 'dwlp-runhead' },
-                    h('span', null, fmt(runRecord.startedAt)),
-                    unread.has(runRecord.id)
-                      ? h('span', { className: 'dwlp-unread' }, COPY.unreadReport)
-                      : null,
-                  )
-                : null,
+            group.runs.flatMap((runRecord) => [
+              // Every report carries its own read toggle, so a single one can be put back
+              // to unread the way a mail row can.
+              h(
+                'div',
+                { key: `${runRecord.id}-head`, className: 'dwlp-runhead' },
+                h('span', null, fmt(runRecord.startedAt)),
+                unread.has(runRecord.id) ? h('span', { className: 'dwlp-unread' }, COPY.unreadReport) : null,
+                h(
+                  'button',
+                  {
+                    className: 'dwlp-runbtn',
+                    onClick: () =>
+                      unread.has(runRecord.id)
+                        ? run('seen', { runId: runRecord.id })
+                        : run('unseen', { runId: runRecord.id }),
+                  },
+                  unread.has(runRecord.id) ? COPY.markRead : COPY.markUnread,
+                ),
+              ),
               ...runRecord.entries.map((entry, index) =>
                 h(
                   'button',
@@ -1006,6 +1026,7 @@ window.__ModuleLoader__.load({
           { className: 'dwl-field' },
           h('span', { className: 'dwl-meta' }, `${(state && state.unreadUpdates) || 0} ${COPY.newUpdates}`),
           h('button', { className: 'dwl-btn', disabled: busy, onClick: () => run('seen') }, COPY.markAllRead),
+          h('button', { className: 'dwl-btn', disabled: busy, onClick: () => run('unseen') }, COPY.markAllUnread),
         ),
 
         h('h3', null, COPY.topics),
@@ -1069,6 +1090,7 @@ window.__ModuleLoader__.load({
             { className: 'dwlp-head-actions' },
             unread ? h('span', { className: 'dwlp-chip' }, `${unread} ${COPY.newUpdates}`) : null,
             unread ? h('button', { className: 'dwl-btn', disabled: busy, onClick: () => run('seen') }, COPY.markAllRead) : null,
+            h('button', { className: 'dwl-btn', disabled: busy, onClick: () => run('unseen') }, COPY.markAllUnread),
             h('button', { className: 'dwl-btn dwlp-primary', disabled: busy, onClick: () => run('run') }, COPY.runNow),
           ),
         ),
@@ -1112,7 +1134,7 @@ window.__ModuleLoader__.load({
                       h('h2', null, COPY.digests),
                       h('span', { className: 'dwl-meta' }, COPY.entryHint),
                     ),
-                    h(HistorySection, { state }),
+                    h(HistorySection, { state, run }),
                   ),
                 ],
           ),

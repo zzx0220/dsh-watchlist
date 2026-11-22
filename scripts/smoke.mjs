@@ -181,6 +181,30 @@ try {
     }
   })
 
+  check('a report can be put back to unread, one or all', () => {
+    const backDir = mkdtempSync(join(tmpdir(), 'watchlist-unread-'))
+    try {
+      const first = store.appendRunEntry(backDir, { topic: 'Topic A', hasUpdate: true, summary: 'a' })
+      store.closeCurrentRun(backDir)
+      const second = store.appendRunEntry(backDir, { topic: 'Topic B', hasUpdate: true, summary: 'b' })
+      store.markSeen(backDir)
+      assert.deepEqual(store.unseenRunIds(backDir), [])
+      store.markRunUnseen(backDir, second.runId)
+      assert.deepEqual(store.unseenRunIds(backDir), [second.runId], 'only the toggled report goes back')
+      assert.equal(store.unreadUpdateCount(backDir), 1)
+      store.markRunUnseen(backDir, first.runId)
+      assert.equal(store.unseenRunIds(backDir).length, 2, 'each report toggles on its own')
+      store.markSeen(backDir)
+      assert.deepEqual(store.unseenRunIds(backDir), [])
+      store.markAllUnseen(backDir)
+      assert.equal(store.unseenRunIds(backDir).length, 2, 'mark all unread covers every report')
+      store.markSeen(backDir)
+      assert.deepEqual(store.unseenRunIds(backDir), [])
+    } finally {
+      rmSync(backDir, { recursive: true, force: true })
+    }
+  })
+
   check('an old state seeds read reports from its timestamp', () => {
     const legacySeenDir = mkdtempSync(join(tmpdir(), 'watchlist-seen-'))
     try {

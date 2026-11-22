@@ -26,7 +26,8 @@ progress, write it down, and push a summary.
   history.
   The row carries a count badge for unread entries that reported real progress. Read
   state is per report: opening today's report clears today's entries only, yesterday's
-  report keeps its `未读` tag, and `全部已读` on the page or in Settings clears them all.
+  report keeps its `未读` tag, and every report carries a read/unread toggle. `全部已读`
+  and `全部未读` on the page or in Settings flip them all at once.
 - Settings → Watchlist: the schedule, push and language controls. The page does
   not repeat them; it only reminds you where they are.
 - The in-app reader for a single report, opened from the page's history or from a
