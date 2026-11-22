@@ -375,6 +375,7 @@ window.__ModuleLoader__.load({
       .dwl-entry { display: block; width: 100%; text-align: left; border: 0; background: none; color: inherit;
         padding: 6px 4px; border-radius: 6px; cursor: pointer; font: inherit; font-size: 12px; }
       .dwl-entry:hover { background: var(--dsw-alias-bg-layer-2, rgba(0,0,0,.05)); }
+      .dwl-popbackdrop { position: fixed; inset: 0; z-index: 19; background: transparent; pointer-events: auto; }
       .dwl-backdrop { position: fixed; inset: 0; z-index: 39; background: rgba(0, 0, 0, .18); pointer-events: auto; }
       .dwl-reader { -webkit-app-region: no-drag; pointer-events: auto; position: fixed; top: 6vh; left: 7vw; right: 7vw; bottom: 6vh; z-index: 40; display: flex; flex-direction: column;
         background: var(--dsw-alias-bg-overlay, #fff); color: var(--dsw-alias-label-primary, #111);
@@ -825,9 +826,11 @@ window.__ModuleLoader__.load({
       const latest = runs[0]
       const shown = latest ? latest.entries.slice(0, 3) : []
       const total = runs.reduce((sum, run) => sum + run.entries.length, 0)
-      return h(
+      return [
+        h('div', { key: 'backdrop', className: 'dwl-popbackdrop', onClick: onClose }),
+        h(
         'div',
-        { className: 'dwl dwl-overlay', role: 'dialog', 'aria-label': COPY.title },
+        { key: 'card', className: 'dwl dwl-overlay', role: 'dialog', 'aria-label': COPY.title },
         h(StyleTag),
         h(
           'div',
@@ -861,7 +864,8 @@ window.__ModuleLoader__.load({
           h('span', { className: 'dwl-meta' }, `${COPY.entryHint}${total ? ` · ${total}` : ''}`),
           h('button', { className: 'dwl-btn', onClick: () => openAll() }, `${COPY.viewAll}${total ? `（${total}）` : ''}`),
         ),
-      )
+        ),
+      ]
     }
 
     function AllRuns({ state }) {
