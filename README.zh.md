@@ -54,6 +54,7 @@ dsh plugin --profile desktop add /绝对路径/dsh-watchlist
 | `schedule.monthday` | 1 | 每月几号 |
 | `push.channels` | `["session"]` | `session` / `macos` / `wechat` |
 | `workspaceDir` | `null` | 巡检会话的工作目录，默认用 Host 默认目录 |
+| `locale` | `auto` | 界面语言：`auto`（跟随 DSH）／`zh`／`en`；其他语言显示英文 |
 
 ## 数据文件
 

@@ -58,6 +58,7 @@ initial value, runtime changes win and survive upgrades.
 | `schedule.monthday` | 1 | Day of month for monthly runs |
 | `push.channels` | `["session"]` | `session` / `macos` / `wechat` |
 | `workspaceDir` | `null` | Working directory for the scheduled session |
+| `locale` | `auto` | UI language: `auto` (follow DSH), `zh`, or `en`; other locales show English |
 
 ## Data layout
 

@@ -15,55 +15,145 @@ window.__ModuleLoader__.load({
     const h = React.createElement
     const { useState, useEffect, useCallback } = React
 
-    const ZH = (() => {
-      try {
-        return String(navigator.language || '').toLowerCase().startsWith('zh')
-      } catch {
-        return true
-      }
-    })()
+    /* ---------- 语言：设置 > DSH 语言 > 浏览器语言；非中文一律英文 ---------- */
 
-    const COPY = {
-      nav: ZH ? '关注清单' : 'Watchlist',
-      title: ZH ? '关注清单' : 'Watchlist',
-      dataDir: ZH ? '数据目录' : 'Data',
-      topics: ZH ? '主题' : 'Topics',
-      empty: ZH ? '还没有主题，添加一个想长期追踪的题目。' : 'No topics yet. Add something you want to follow.',
-      addPlaceholder: ZH ? '添加主题，例如：某模型的新版本发布' : 'Add a topic, e.g. a model release',
-      add: ZH ? '添加' : 'Add',
-      remove: ZH ? '删除' : 'Remove',
-      runNow: ZH ? '立即运行一次' : 'Run now',
-      running: ZH ? '已投递' : 'Queued',
-      settings: ZH ? '巡检设置' : 'Schedule',
-      enabled: ZH ? '自动巡检' : 'Auto-run',
-      frequency: ZH ? '频率' : 'Frequency',
-      daily: ZH ? '每天' : 'Daily',
-      weekly: ZH ? '每周' : 'Weekly',
-      monthly: ZH ? '每月' : 'Monthly',
-      time: ZH ? '时间' : 'Time',
-      lookback: ZH ? '回溯天数' : 'Lookback (days)',
-      maxTopics: ZH ? '单轮上限' : 'Topics per run',
-      push: ZH ? '推送' : 'Push',
-      session: ZH ? '会话内消息' : 'Session message',
-      macos: ZH ? '系统通知' : 'System notification',
-      wechat: ZH ? '微信（需微信插件）' : 'WeChat (needs plugin)',
-      digests: ZH ? '日报' : 'Digests',
-      openFile: ZH ? '用外部程序打开' : 'Open externally',
-      openSidebar: ZH ? '在侧栏打开' : 'Open in sidebar',
-      needSession: ZH ? '没有可用的会话，先用下面的内联阅读' : 'No session available; read inline below',
-      noHost: ZH ? '当前版本没有侧栏预览服务，先用下面的内联阅读' : 'Sidebar preview unavailable; read inline below',
-      noDigest: ZH ? '还没有巡检记录。' : 'No digests yet.',
-      lastRun: ZH ? '上次巡检' : 'Last run',
-      never: ZH ? '尚未巡检' : 'never',
-      unread: ZH ? '未读' : 'unread',
-      close: ZH ? '关闭' : 'Close',
-      openExternal: ZH ? '外部打开' : 'Open externally',
-      entryHint: ZH ? '点条目直接阅读' : 'Click an entry to read',
-      openSettings: ZH ? '在 设置 → 关注清单 中管理' : 'Manage in Settings → Watchlist',
-      loading: ZH ? '加载中…' : 'Loading…',
-      failed: ZH ? '加载失败' : 'Failed to load',
-      next: ZH ? '下次触发' : 'Next run',
-      saveFailed: ZH ? '保存失败' : 'Save failed',
+    let langOverride = null // 'zh' | 'en' | null（null = 跟随 DSH）
+
+    function dshLang() {
+      try {
+        const snapshot = services && services.locale && services.locale.getLocale && services.locale.getLocale()
+        const id = snapshot && (snapshot.id || snapshot.locale || snapshot.language)
+        if (typeof id === 'string' && id) return /^zh/i.test(id) ? 'zh' : 'en'
+      } catch {
+        /* 没有 locale 服务时退回浏览器语言 */
+      }
+      try {
+        return /^zh/i.test(navigator.language || '') ? 'zh' : 'en'
+      } catch {
+        return 'en'
+      }
+    }
+
+    function currentLang() {
+      return langOverride || dshLang()
+    }
+
+    function zh() {
+      return currentLang() === 'zh'
+    }
+
+    const DICT = {
+      zh: {
+        nav: '关注清单',
+        title: '关注清单',
+        dataDir: '数据目录',
+        topics: '主题',
+        empty: '还没有主题，添加一个想长期追踪的题目。',
+        addPlaceholder: '添加主题，例如：某模型的新版本发布',
+        add: '添加',
+        remove: '删除',
+        runNow: '立即运行一次',
+        running: '已投递',
+        settings: '巡检设置',
+        enabled: '自动巡检',
+        frequency: '频率',
+        daily: '每天',
+        weekly: '每周',
+        monthly: '每月',
+        time: '时间',
+        lookback: '回溯天数',
+        maxTopics: '单轮上限',
+        push: '推送',
+        language: '界面语言',
+        langAuto: '跟随 DSH',
+        session: '会话内消息',
+        macos: '系统通知',
+        wechat: '微信（需微信插件）',
+        digests: '日报',
+        openFile: '用外部程序打开',
+        openSidebar: '在侧栏打开',
+        needSession: '没有可用的会话，先用下面的内联阅读',
+        noHost: '当前版本没有侧栏预览服务，先用下面的内联阅读',
+        noDigest: '还没有巡检记录。',
+        lastRun: '上次巡检',
+        never: '尚未巡检',
+        unread: '未读',
+        close: '关闭',
+        openExternal: '外部打开',
+        entryHint: '点条目直接阅读',
+        openSettings: '在 设置 → 关注清单 中管理',
+        loading: '加载中…',
+        failed: '加载失败',
+        next: '下次触发',
+        saveFailed: '保存失败',
+      },
+      en: {
+        nav: 'Watchlist',
+        title: 'Watchlist',
+        dataDir: 'Data',
+        topics: 'Topics',
+        empty: 'No topics yet. Add something you want to follow.',
+        addPlaceholder: 'Add a topic, e.g. a model release',
+        add: 'Add',
+        remove: 'Remove',
+        runNow: 'Run now',
+        running: 'Queued',
+        settings: 'Schedule',
+        enabled: 'Auto-run',
+        frequency: 'Frequency',
+        daily: 'Daily',
+        weekly: 'Weekly',
+        monthly: 'Monthly',
+        time: 'Time',
+        lookback: 'Lookback (days)',
+        maxTopics: 'Topics per run',
+        push: 'Push',
+        language: 'Language',
+        langAuto: 'Follow DSH',
+        session: 'Session message',
+        macos: 'System notification',
+        wechat: 'WeChat (needs plugin)',
+        digests: 'Digests',
+        openFile: 'Open externally',
+        openSidebar: 'Open in sidebar',
+        needSession: 'No session available; read inline below',
+        noHost: 'Sidebar preview unavailable; read inline below',
+        noDigest: 'No digests yet.',
+        lastRun: 'Last run',
+        never: 'never',
+        unread: 'unread',
+        close: 'Close',
+        openExternal: 'Open externally',
+        entryHint: 'Click an entry to read',
+        openSettings: 'Manage in Settings → Watchlist',
+        loading: 'Loading…',
+        failed: 'Failed to load',
+        next: 'Next run',
+        saveFailed: 'Save failed',
+      },
+    }
+
+    // 用 Proxy 让既有的 COPY.xxx 永远读到当前语言，不必逐处改写。
+    const COPY = new Proxy({}, { get: (_target, key) => (DICT[currentLang()] || DICT.en)[key] })
+
+    const langListeners = new Set()
+    function notifyLang() {
+      for (const listener of langListeners) listener()
+    }
+    function applyLocaleSetting(value) {
+      const next = value === 'zh' || value === 'en' ? value : null
+      if (next === langOverride) return
+      langOverride = next
+      notifyLang()
+    }
+    function useLang() {
+      const [, bump] = useState(0)
+      useEffect(() => {
+        const listener = () => bump((n) => n + 1)
+        langListeners.add(listener)
+        return () => langListeners.delete(listener)
+      }, [])
+      return currentLang()
     }
 
     const API = '/dsh-watchlist-api'
@@ -147,6 +237,7 @@ window.__ModuleLoader__.load({
           if (data && data.ok) {
             setState(data)
             setError('')
+            applyLocaleSetting(data.settings && data.settings.locale)
           } else {
             setError((data && data.error) || COPY.failed)
           }
@@ -359,7 +450,7 @@ window.__ModuleLoader__.load({
               'button',
               { className: 'dwl-daybtn', onClick: () => toggle(group.day) },
               h('span', null, group.day),
-              h('span', { className: 'dwl-meta' }, `${group.entries.length} ${ZH ? '条' : 'items'}`),
+              h('span', { className: 'dwl-meta' }, `${group.entries.length} ${zh() ? '条' : 'items'}`),
               h('span', { className: 'dwl-meta' }, viewDay === group.day ? '▾' : '▸'),
             ),
             viewDay === group.day
@@ -378,7 +469,7 @@ window.__ModuleLoader__.load({
                             state.openSessionId ||
                             (state.schedule && state.schedule.task && state.schedule.task.sessionId)
                           const result = openDigestTab(group.day)
-                          setNotice(result === 'ok' ? '' : `${ZH ? '打开失败' : 'Failed'}：${result}`)
+                          setNotice(result === 'ok' ? '' : `${zh() ? '打开失败' : 'Failed'}：${result}`)
                         },
                       },
                       COPY.openSidebar,
@@ -397,6 +488,7 @@ window.__ModuleLoader__.load({
     }
 
     function WatchlistPage() {
+      useLang()
       const { state, error, busy, run } = useWatchlist()
       const [draft, setDraft] = useState('')
       const [keywords, setKeywords] = useState('')
@@ -424,7 +516,7 @@ window.__ModuleLoader__.load({
         h(
           'div',
           { className: 'dwl-meta' },
-          `${COPY.dataDir}：${state.dataDir} · ${state.topics.length} ${ZH ? '个主题' : 'topics'}`,
+          `${COPY.dataDir}：${state.dataDir} · ${state.topics.length} ${zh() ? '个主题' : 'topics'}`,
         ),
 
         h('h3', null, COPY.topics),
@@ -540,12 +632,31 @@ window.__ModuleLoader__.load({
           h('label', { className: 'dwl-check dwl-meta' }, h('input', { type: 'checkbox', disabled: true }), COPY.wechat),
         ),
 
+        h('h3', null, COPY.language),
+        h(
+          'div',
+          { className: 'dwl-field' },
+          h('span', null, COPY.language),
+          h(
+            'select',
+            {
+              className: 'dwl-input',
+              value: settings.locale || 'auto',
+              onChange: (event) => patchSettings({ locale: event.target.value }),
+            },
+            h('option', { value: 'auto' }, COPY.langAuto),
+            h('option', { value: 'zh' }, '中文'),
+            h('option', { value: 'en' }, 'English'),
+          ),
+        ),
+
         h('h3', null, COPY.digests),
         h(Digests, { state }),
       )
     }
 
     function FooterAction(props) {
+      useLang()
       const { state, reload } = useWatchlist()
       useEffect(() => {
         const timer = setInterval(reload, 60000)
@@ -618,6 +729,7 @@ window.__ModuleLoader__.load({
     }
 
     function DigestTab() {
+      useLang()
       const day = useDigestDay()
       const [text, setText] = useState('')
       const [error, setError] = useState('')
@@ -740,7 +852,7 @@ window.__ModuleLoader__.load({
                 onClick: () => {
                   const result = openDigestTab(view.day)
                   if (result === 'ok') closeReader()
-                  else setNotice(`${ZH ? '打开失败' : 'Failed'}：${result}`)
+                  else setNotice(`${zh() ? '打开失败' : 'Failed'}：${result}`)
                 },
               },
               COPY.openSidebar,
@@ -759,6 +871,7 @@ window.__ModuleLoader__.load({
     }
 
     function Overlay() {
+      useLang()
       const { open, reader } = useUiState()
       const { state, reload } = useWatchlist()
       useEffect(() => {
@@ -779,9 +892,16 @@ window.__ModuleLoader__.load({
     }
 
     return {
-      inject: ['slots', 'sidebarRight', 'sidebarRightTabs', 'layout'],
+      inject: ['slots', 'sidebarRight', 'sidebarRightTabs', 'layout', 'locale'],
       apply(ctx) {
         services = ctx
+        try {
+          if (services.locale && typeof services.locale.subscribe === 'function') {
+            ctx.effect(() => services.locale.subscribe(() => notifyLang()))
+          }
+        } catch {
+          /* 没有语言服务时只跟随浏览器语言 */
+        }
         ctx.slots.inject('settings.section', () =>
           ctx.slots.register(
             { name: 'settings.section', id: 'watchlist', order: 30, label: () => COPY.nav },
