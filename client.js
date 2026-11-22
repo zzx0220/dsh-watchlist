@@ -894,7 +894,9 @@ window.__ModuleLoader__.load({
         const sidebar = services && services.sidebarRight
         if (!sidebar || typeof sidebar.openTab !== 'function') return 'nohost'
         setDigestDay(runId)
-        sidebar.openTab('watchlist-digest', {})
+        // The body runs in the pane's own slot context and reads its run from
+        // `tab.navigation.params`; module state alone never reaches it.
+        sidebar.openTab('watchlist-digest', { params: { runId } })
         try {
           if (services.layout && typeof services.layout.openRightbar === 'function') services.layout.openRightbar(true, false)
         } catch {
@@ -906,9 +908,15 @@ window.__ModuleLoader__.load({
       }
     }
 
-    function DigestTab() {
+    function DigestTab(props) {
       useLang()
-      const runId = useDigestDay()
+      // The pane body receives the framework's `useTabInfo`; the run it should
+      // show arrives as `tab.navigation.params.runId` from openDigestTab.
+      const tabInfo = props && typeof props.useTabInfo === 'function' ? props.useTabInfo() : null
+      const tab = tabInfo && tabInfo.tab
+      const paramRunId = tab && tab.navigation && tab.navigation.params ? tab.navigation.params.runId : null
+      const fallbackRunId = useDigestDay()
+      const runId = paramRunId || fallbackRunId || null
       const [text, setText] = useState('')
       const [error, setError] = useState('')
       useEffect(() => {
