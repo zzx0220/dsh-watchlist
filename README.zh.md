@@ -55,6 +55,7 @@ dsh plugin --profile desktop add /绝对路径/dsh-watchlist
 | `push.channels` | `["session"]` | `session` / `macos` / `wechat` |
 | `workspaceDir` | `null` | 巡检会话的工作目录，默认用 Host 默认目录 |
 | `locale` | `auto` | 界面语言：`auto`（跟随 DSH）／`zh`／`en`；其他语言显示英文 |
+| `promptHint` | `true` | 是否在系统提示里加一句提醒，让任意会话的 agent 知道可以用 `watchlist_*` |
 
 ## 数据文件
 

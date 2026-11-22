@@ -24,3 +24,4 @@
           channels:
             - session
         workspaceDir: null
+        promptHint: true

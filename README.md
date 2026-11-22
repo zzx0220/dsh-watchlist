@@ -59,6 +59,7 @@ initial value, runtime changes win and survive upgrades.
 | `push.channels` | `["session"]` | `session` / `macos` / `wechat` |
 | `workspaceDir` | `null` | Working directory for the scheduled session |
 | `locale` | `auto` | UI language: `auto` (follow DSH), `zh`, or `en`; other locales show English |
+| `promptHint` | `true` | Adds one line to the system prompt so agents in any session know `watchlist_*` exists |
 
 ## Data layout
 

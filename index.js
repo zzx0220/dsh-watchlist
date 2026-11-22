@@ -357,34 +357,68 @@ export function apply(ctx, config) {
   })
 
 
+  // 让任意会话的 agent 知道关注清单怎么用（可在 cordis.patch.yml 里用 promptHint: false 关掉）。
+  if (config?.promptHint !== false) {
+    try {
+      const systemPrompt = typeof ctx.get === 'function' ? ctx.get('systemPrompt') : ctx.systemPrompt
+      if (systemPrompt && typeof systemPrompt.section === 'function') {
+        ctx.effect(() =>
+          systemPrompt.section({
+            name: 'tool:watchlist',
+            order: 900,
+            text:
+              '关注清单（watchlist_*）：用户想长期跟进某个话题时，先复述并确认主题措辞，再调用 watchlist_add，' +
+              '并在 note 里写清"什么算有进展"；查看清单用 watchlist_list，删除用 watchlist_remove。',
+          }),
+        )
+      }
+    } catch {
+      /* 没有 systemPrompt 服务时只依赖工具本身 */
+    }
+  }
+
   const tool = (definition) => ctx.tools.register(defineTool(definition))
   const text = (value) => [{ type: 'text', text: value.message }]
 
   tool({
     name: 'watchlist_add',
     description:
-      '把主题加入关注清单，之后每次巡检都会追踪它。主题写得具体一点（"某个模型的新版本发布" 好过 "AI"），' +
-      '并可在 note 里写清"什么算有进展"，这能显著提高检索质量。重复添加同一主题不会新增。',
+      '把主题加入关注清单，之后每次巡检都会追踪它。写入前先向用户复述并确认主题措辞，并尽量补一条 note 说明"什么算有进展"。' +
+      '主题写得具体一点（"某个模型的新版本发布" 好过 "AI"）。重复添加同一主题不会新增。可用 topics 一次加多个。',
     parameters: {
-      topic: { type: 'string', required: true, description: '要长期追踪的主题，一句话，具体' },
+      topic: { type: 'string', description: '要长期追踪的主题（单个）；与 topics 二选一' },
+      topics: { type: 'array', items: { type: 'string' }, description: '一次加多个主题；与 topic 二选一' },
       keywords: { type: 'array', items: { type: 'string' }, description: '补充搜索关键词，可留空' },
       note: { type: 'string', description: '给自己和巡检用的备注：为什么关注、什么叫有进展' },
     },
     output: { schema: { type: 'json' }, render: (_args, value) => text(value) },
     async execute(args) {
-      const result = store.addTopic(dataDir, args)
-      if (result.created) {
+      const single = String(args.topic ?? '').trim()
+      const batch = Array.isArray(args.topics) ? args.topics.map((item) => String(item).trim()).filter(Boolean) : []
+      const names = single ? [single, ...batch.filter((name) => name !== single)] : batch
+      if (!names.length) return { message: '需要 topic 或 topics：告诉我至少一个主题', ok: false }
+      const added = []
+      const existed = []
+      for (const name of names) {
+        const result = store.addTopic(dataDir, { topic: name, keywords: args.keywords, note: args.note })
+        if (result.created) added.push(result.topic.topic)
+        else existed.push(result.topic.topic)
+      }
+      if (added.length) {
         // 第一个主题进来后，才把定时任务建起来。
         const settings = settingsOf()
         if (settings.schedule.enabled) ensureTask(false).catch(() => undefined)
       }
+      const total = store.loadTopics(dataDir).length
+      const lines = []
+      if (added.length) lines.push(`已加入：${added.map((name) => `「${name}」`).join('、')}`)
+      if (existed.length) lines.push(`已在清单里：${existed.map((name) => `「${name}」`).join('、')}`)
       return {
-        message: result.created
-          ? `已加入关注清单：「${result.topic.topic}」（共 ${result.total} 个主题）`
-          : `「${result.topic.topic}」已在清单里（共 ${result.total} 个主题），未重复添加`,
-        id: result.topic.id,
-        created: result.created,
-        total: result.total,
+        message: `${lines.join('；')}（共 ${total} 个主题）`,
+        ok: true,
+        added,
+        existed,
+        total,
       }
     },
   })

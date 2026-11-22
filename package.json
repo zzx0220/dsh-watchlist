@@ -1,6 +1,6 @@
 {
   "name": "dsh-watchlist",
-  "version": "0.4.2",
+  "version": "0.4.3",
   "description": "Follow-list for DeepSeek Harness: keep the topics you care about, run scheduled web searches for progress, record digests, and push summaries where you want them.",
   "license": "MIT",
   "author": "zzx0220",
