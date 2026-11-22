@@ -14,7 +14,7 @@
         timeZone: Asia/Shanghai
         maxTopicsPerRun: 8
         schedule:
-          enabled: false
+          enabled: true
           frequency: daily
           time: '08:30'
           weekdays:

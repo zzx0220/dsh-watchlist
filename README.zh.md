@@ -47,7 +47,7 @@ dsh plugin --profile desktop add /绝对路径/dsh-watchlist
 | `lookbackDays` | 7 | 每次搜索回溯多少天 |
 | `maxTopicsPerRun` | 8 | 单轮最多跑几个主题（控 token） |
 | `timeZone` | `Asia/Shanghai` | 调度与日报日期用的时区 |
-| `schedule.enabled` | `false` | 是否自动巡检（默认关，开了才建任务） |
+| `schedule.enabled` | `true` | 是否自动巡检；清单为空时不建任务、不执行 |
 | `schedule.frequency` | `daily` | `daily` / `weekly` / `monthly` |
 | `schedule.time` | `08:30` | 执行时刻 |
 | `schedule.weekdays` | `[1]` | 每周几（ISO，1=周一） |

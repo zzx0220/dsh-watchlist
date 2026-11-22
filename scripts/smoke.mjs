@@ -35,6 +35,11 @@ try {
     assert.equal(r.total, 1)
   })
 
+  check('schedule defaults to enabled', () => {
+    assert.equal(store.normalizeSettings({}).schedule.enabled, true)
+    assert.equal(store.normalizeSettings({ schedule: { enabled: false } }).schedule.enabled, false)
+  })
+
   check('settings merge defaults with patch and clamp', () => {
     const s1 = store.normalizeSettings({ lookbackDays: 1000, schedule: { time: '9:00' } })
     assert.equal(s1.lookbackDays, 90)

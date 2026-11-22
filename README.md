@@ -51,7 +51,7 @@ initial value, runtime changes win and survive upgrades.
 | `lookbackDays` | 7 | How far back each search looks |
 | `maxTopicsPerRun` | 8 | Topics per run (token budget) |
 | `timeZone` | `Asia/Shanghai` | Schedule and digest date zone |
-| `schedule.enabled` | `false` | Auto-run; off until you enable it |
+| `schedule.enabled` | `true` | Auto-run; no task is created or run while the list is empty |
 | `schedule.frequency` | `daily` | `daily` / `weekly` / `monthly` |
 | `schedule.time` | `08:30` | Run time |
 | `schedule.weekdays` | `[1]` | ISO weekdays for weekly runs |

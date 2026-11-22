@@ -174,6 +174,8 @@ export function apply(ctx, config) {
   whenService('schedule', (schedule) => {
     const settings = settingsOf()
     if (!settings.schedule.enabled) return
+    // 新用户清单为空：不建任务、不补检，等第一次 watchlist_add 再建。
+    if (store.loadTopics(dataDir).length === 0) return
     ensureTask(false)
       .then((task) => {
         if (!task || !task.taskId) return undefined
@@ -371,6 +373,11 @@ export function apply(ctx, config) {
     output: { schema: { type: 'json' }, render: (_args, value) => text(value) },
     async execute(args) {
       const result = store.addTopic(dataDir, args)
+      if (result.created) {
+        // 第一个主题进来后，才把定时任务建起来。
+        const settings = settingsOf()
+        if (settings.schedule.enabled) ensureTask(false).catch(() => undefined)
+      }
       return {
         message: result.created
           ? `已加入关注清单：「${result.topic.topic}」（共 ${result.total} 个主题）`
@@ -444,6 +451,14 @@ export function apply(ctx, config) {
       const settings = settingsOf()
       const now = Date.now()
       const state = store.loadState(dataDir)
+      if (store.loadTopics(dataDir).length === 0) {
+        return {
+          message: '关注清单是空的：本次不巡检。先用 watchlist_add 添加主题。',
+          skip: true,
+          reason: 'empty',
+          dataDir,
+        }
+      }
       const current = store.currentRun(dataDir)
       if (current && now - new Date(current.startedAt).getTime() < 30 * 60 * 1000) {
         return {
