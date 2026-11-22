@@ -91,6 +91,8 @@ window.__ModuleLoader__.load({
         openExternal: '外部打开',
         entryHint: '点条目直接阅读',
         viewAll: '查看全部',
+        back: '返回',
+        closeAll: '关闭全部',
         allTitle: '全部巡检记录',
         openSettings: '在 设置 → 关注清单 中管理',
         loading: '加载中…',
@@ -144,6 +146,8 @@ window.__ModuleLoader__.load({
         openExternal: 'Open externally',
         entryHint: 'Click an entry to read',
         viewAll: 'View all',
+        back: 'Back',
+        closeAll: 'Close all',
         allTitle: 'All runs',
         openSettings: 'Manage in Settings → Watchlist',
         loading: 'Loading…',
@@ -253,6 +257,15 @@ window.__ModuleLoader__.load({
       ui.all = false
       notifyUi()
     }
+    /** Close every layer at once (backdrop click, the ✕ control). */
+    function closeEverything() {
+      const ui = uiStore()
+      ui.open = false
+      ui.all = false
+      ui.reader = null
+      ui.backTo = null
+      notifyUi()
+    }
     function closeReader() {
       const ui = uiStore()
       const back = ui.backTo
@@ -351,6 +364,7 @@ window.__ModuleLoader__.load({
       .dwl-entry { display: block; width: 100%; text-align: left; border: 0; background: none; color: inherit;
         padding: 6px 4px; border-radius: 6px; cursor: pointer; font: inherit; font-size: 12px; }
       .dwl-entry:hover { background: var(--dsw-alias-bg-layer-2, rgba(0,0,0,.05)); }
+      .dwl-backdrop { position: fixed; inset: 0; z-index: 39; background: rgba(0, 0, 0, .18); pointer-events: auto; }
       .dwl-reader { pointer-events: auto; position: fixed; top: 6vh; left: 7vw; right: 7vw; bottom: 6vh; z-index: 40; display: flex; flex-direction: column;
         background: var(--dsw-alias-bg-overlay, #fff); color: var(--dsw-alias-label-primary, #111);
         border: 1px solid var(--dsw-alias-border-l1, #ddd); border-radius: 12px; box-shadow: 0 18px 48px rgba(0,0,0,.22);
@@ -839,44 +853,52 @@ window.__ModuleLoader__.load({
       )
     }
 
-    function AllRuns({ state, onClose }) {
+    function AllRuns({ state }) {
       const runs = (state && state.runs) || []
-      return h(
-        'div',
-        { className: 'dwl dwl-reader', role: 'dialog', 'aria-label': COPY.allTitle },
-        h(StyleTag),
+      return [
+        h('div', { key: 'backdrop', className: 'dwl-backdrop', onClick: closeEverything }),
         h(
           'div',
-          { className: 'dwl-reader-head' },
-          h('div', { style: { fontWeight: 600 } }, COPY.allTitle),
-          h('div', { style: { display: 'flex', gap: 8 } }, h('button', { className: 'dwl-btn', onClick: onClose }, COPY.close)),
-        ),
-        h(
-          'div',
-          { className: 'dwl-reader-body' },
-          runs.length
-            ? runs.map((run) =>
-                h(
-                  'div',
-                  { key: run.id, style: { marginBottom: 14 } },
-                  h('div', { className: 'dwl-meta', style: { marginBottom: 4 } }, `${fmt(run.startedAt)} · ${run.entries.length}${zh() ? ' 条' : ''}`),
-                  run.entries.map((entry, index) =>
-                    h(
-                      'button',
-                      {
-                        key: `${entry.at}-${index}`,
-                        className: 'dwl-entry',
-                        onClick: () => openReader({ runId: run.id, path: run.path, from: run.from, to: run.to }, 'all'),
-                      },
-                      h('div', null, entry.topic),
-                      h('div', { className: 'dwl-meta' }, entry.summary),
+          { key: 'card', className: 'dwl dwl-reader', role: 'dialog', 'aria-label': COPY.allTitle },
+          h(StyleTag),
+          h(
+            'div',
+            { className: 'dwl-reader-head' },
+            h(
+              'div',
+              { style: { display: 'flex', gap: 8, alignItems: 'center' } },
+              h('button', { className: 'dwl-btn', onClick: closeAll, title: COPY.back }, `← ${COPY.back}`),
+              h('div', { style: { fontWeight: 600 } }, COPY.allTitle),
+            ),
+            h('div', { style: { display: 'flex', gap: 8 } }, h('button', { className: 'dwl-btn', onClick: closeEverything }, COPY.closeAll)),
+          ),
+          h(
+            'div',
+            { className: 'dwl-reader-body' },
+            runs.length
+              ? runs.map((run) =>
+                  h(
+                    'div',
+                    { key: run.id, style: { marginBottom: 14 } },
+                    h('div', { className: 'dwl-meta', style: { marginBottom: 4 } }, `${fmt(run.startedAt)} · ${run.entries.length}${zh() ? ' 条' : ''}`),
+                    run.entries.map((entry, index) =>
+                      h(
+                        'button',
+                        {
+                          key: `${entry.at}-${index}`,
+                          className: 'dwl-entry',
+                          onClick: () => openReader({ runId: run.id, path: run.path, from: run.from, to: run.to }, 'all'),
+                        },
+                        h('div', null, entry.topic),
+                        h('div', { className: 'dwl-meta' }, entry.summary),
+                      ),
                     ),
                   ),
-                ),
-              )
-            : h('div', { className: 'dwl-empty' }, COPY.noDigest),
+                )
+              : h('div', { className: 'dwl-empty' }, COPY.noDigest),
+          ),
         ),
-      )
+      ]
     }
 
     function Reader({ view }) {
@@ -900,18 +922,25 @@ window.__ModuleLoader__.load({
           alive = false
         }
       }, [view.runId])
-      return h(
+      return [
+        h('div', { key: 'backdrop', className: 'dwl-backdrop', onClick: closeEverything }),
+        h(
         'div',
-        { className: 'dwl dwl-reader', role: 'dialog', 'aria-label': COPY.title },
+        { key: 'card', className: 'dwl dwl-reader', role: 'dialog', 'aria-label': COPY.title },
         h(StyleTag),
         h(
           'div',
           { className: 'dwl-reader-head' },
           h(
             'div',
-            { style: { minWidth: 0 } },
-            h('div', { style: { fontWeight: 600 } }, `${COPY.title} · ${fmt(view.from || view.startedAt)} → ${fmt(view.to)}`),
-            h('div', { className: 'dwl-src' }, view.path || ''),
+            { style: { minWidth: 0, display: 'flex', gap: 8, alignItems: 'flex-start' } },
+            h('button', { className: 'dwl-btn', onClick: closeReader, title: COPY.back }, `← ${COPY.back}`),
+            h(
+              'div',
+              { style: { minWidth: 0 } },
+              h('div', { style: { fontWeight: 600 } }, `${COPY.title} · ${fmt(view.from || view.startedAt)} → ${fmt(view.to)}`),
+              h('div', { className: 'dwl-src' }, view.path || ''),
+            ),
           ),
           h(
             'div',
@@ -929,7 +958,7 @@ window.__ModuleLoader__.load({
               COPY.openSidebar,
             ),
             h('button', { className: 'dwl-btn', onClick: () => act('open', { runId: view.runId }) }, COPY.openFile),
-            h('button', { className: 'dwl-btn', onClick: closeReader }, COPY.close),
+            h('button', { className: 'dwl-btn', onClick: closeEverything }, COPY.closeAll),
           ),
         ),
         notice ? h('div', { className: 'dwl-meta', style: { padding: '8px 14px 0' } }, notice) : null,
@@ -938,7 +967,8 @@ window.__ModuleLoader__.load({
           { className: 'dwl-reader-body' },
           error ? h('div', { className: 'dwl-err' }, error) : text ? h(Markdown, { text }) : h('div', { className: 'dwl-meta' }, COPY.loading),
         ),
-      )
+      ),
+      ]
     }
 
     function Overlay() {
@@ -959,7 +989,7 @@ window.__ModuleLoader__.load({
         return () => window.removeEventListener('keydown', onKey)
       }, [open, all, reader, reload])
       if (reader) return h(Reader, { view: reader })
-      if (all) return h(AllRuns, { state, onClose: () => closeAll() })
+      if (all) return h(AllRuns, { state })
       if (!open) return null
       return h(Panel, { state, onClose: () => setOpen(false) })
     }
