@@ -86,7 +86,6 @@ window.__ModuleLoader__.load({
         notifyTestTitle: '关注清单测试通知',
         digests: '日报',
         openFile: '用外部程序打开',
-        openSidebar: '在侧栏打开',
         noDigest: '还没有巡检记录。',
         lastRun: '上次巡检',
         never: '尚未巡检',
@@ -139,7 +138,6 @@ window.__ModuleLoader__.load({
         notifyTestTitle: 'Watchlist test notification',
         digests: 'Digests',
         openFile: 'Open externally',
-        openSidebar: 'Open in sidebar',
         noDigest: 'No digests yet.',
         lastRun: 'Last run',
         never: 'never',
@@ -263,8 +261,7 @@ window.__ModuleLoader__.load({
           } catch {
             /* Focus is best effort */
           }
-          const opened = run && run.id ? openDigestTab(run.id) : 'skipped'
-          if (run && run.id && opened !== 'ok') openRunReport(run)
+          openRunReport(run)
           try {
             note.close()
           } catch {
@@ -1070,97 +1067,6 @@ window.__ModuleLoader__.load({
       )
     }
 
-    const DIGEST_TAB = 'dsh-watchlist/digest'
-
-    /** Current date of the report tab in the right sidebar; the tab body subscribes
-     *  to it instead of relying on tab parameters. */
-    const digestTab = { runId: null, listeners: new Set() }
-    function setDigestDay(runId) {
-      digestTab.runId = runId
-      for (const listener of digestTab.listeners) listener()
-    }
-    function useDigestDay() {
-      const [, bump] = useState(0)
-      useEffect(() => {
-        const listener = () => bump((n) => n + 1)
-        digestTab.listeners.add(listener)
-        return () => digestTab.listeners.delete(listener)
-      }, [])
-      return digestTab.runId
-    }
-
-    /** Open the plugin's own tab in the right sidebar (not through file preview,
-     *  so it does not depend on the workspace). */
-    function openDigestTab(runId) {
-      try {
-        const sidebar = services && services.sidebarRight
-        if (!sidebar || typeof sidebar.openTab !== 'function') return 'nohost'
-        setDigestDay(runId)
-        // The body runs in the pane's own slot context and reads its run from
-        // `tab.navigation.params`; module state alone never reaches it.
-        sidebar.openTab('watchlist-digest', { params: { runId } })
-        try {
-          if (services.layout && typeof services.layout.openRightbar === 'function') services.layout.openRightbar(true, false)
-        } catch {
-          /* A failed panel expansion does not affect the tab */
-        }
-        return 'ok'
-      } catch (error) {
-        return `error:${String((error && error.message) || error)}`
-      }
-    }
-
-    function DigestTab(props) {
-      useLang()
-      // The pane body receives the framework's `useTabInfo`; the run it should
-      // show arrives as `tab.navigation.params.runId` from openDigestTab.
-      const tabInfo = props && typeof props.useTabInfo === 'function' ? props.useTabInfo() : null
-      const tab = tabInfo && tabInfo.tab
-      const paramRunId = tab && tab.navigation && tab.navigation.params ? tab.navigation.params.runId : null
-      const fallbackRunId = useDigestDay()
-      const runId = paramRunId || fallbackRunId || null
-      const [text, setText] = useState('')
-      const [error, setError] = useState('')
-      const [day, setDay] = useState('')
-      useEffect(() => {
-        if (!runId) return undefined
-        let alive = true
-        setText('')
-        setError('')
-        act('read', { runId })
-          .then((result) => {
-            if (!alive) return
-            if (result && result.ok) {
-              setText(result.text)
-              setDay(result.day || '')
-            } else setError(String((result && result.error) || COPY.failed))
-          })
-          .catch((cause) => {
-            if (alive) setError(String((cause && cause.message) || cause))
-          })
-        return () => {
-          alive = false
-        }
-      }, [runId])
-      return h(
-        'div',
-        { className: 'dwl', style: { height: '100%', overflow: 'auto', padding: '10px 14px', boxSizing: 'border-box' } },
-        h(StyleTag),
-        h(
-          'div',
-          { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, marginBottom: 10 } },
-          // One file per day: title the day file by its day, not by the run that opened it.
-          h('div', { style: { fontWeight: 600 } }, `${COPY.title} · ${day || fmt(runId)}`),
-          h(
-            'div',
-            { style: { display: 'flex', gap: 8 } },
-            h('button', { className: 'dwl-btn', onClick: () => act('open', { runId }) }, COPY.openFile),
-          ),
-        ),
-        error ? h('div', { className: 'dwl-err' }, error) : text ? h(Markdown, { text }) : h('div', { className: 'dwl-meta' }, COPY.loading),
-      )
-    }
-
     /** run-20261122T140500Z → 2026-11-22 14:05 (local time); other inputs pass through unchanged. */
     function fmt(value) {
       const text = String(value || '')
@@ -1202,7 +1108,6 @@ window.__ModuleLoader__.load({
     function Reader({ view }) {
       const [text, setText] = useState('')
       const [error, setError] = useState('')
-      const [notice, setNotice] = useState('')
       useEffect(() => {
         let alive = true
         setText('')
@@ -1242,23 +1147,10 @@ window.__ModuleLoader__.load({
             h(
               'div',
               { style: { display: 'flex', gap: 8, flexShrink: 0 } },
-              h(
-                'button',
-                {
-                  className: 'dwl-btn',
-                  onClick: () => {
-                    const result = openDigestTab(view.runId)
-                    if (result === 'ok') closeReader()
-                    else setNotice(`${zh() ? '打开失败' : 'Failed'}：${result}`)
-                  },
-                },
-                COPY.openSidebar,
-              ),
               h('button', { className: 'dwl-btn', onClick: () => act('open', { runId: view.runId }) }, COPY.openFile),
               h('button', { className: 'dwl-btn', onClick: closeReader }, COPY.close),
             ),
           ),
-          notice ? h('div', { className: 'dwl-meta', style: { padding: '8px 14px 0' } }, notice) : null,
           h(
             'div',
             { className: 'dwl-reader-body' },
@@ -1304,7 +1196,7 @@ window.__ModuleLoader__.load({
     }
 
     return {
-      inject: ['slots', 'sidebarRight', 'sidebarRightTabs', 'layout', 'locale'],
+      inject: ['slots', 'locale'],
       apply(ctx) {
         services = ctx
         try {
@@ -1333,16 +1225,6 @@ window.__ModuleLoader__.load({
         )
         ctx.slots.inject('shell.overlay', () =>
           ctx.slots.register({ name: 'shell.overlay', id: 'watchlist-overlay', order: 91000 }, Overlay),
-        )
-        ctx.effect(() =>
-          ctx.sidebarRightTabs.register({
-            id: DIGEST_TAB,
-            kind: 'watchlist-digest',
-            title: () => COPY.nav,
-          }),
-        )
-        ctx.slots.inject('sidebar.right.pane.tab', () =>
-          ctx.slots.register({ name: 'sidebar.right.pane.tab', key: DIGEST_TAB }, DigestTab),
         )
       },
     }

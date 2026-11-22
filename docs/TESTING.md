@@ -24,7 +24,7 @@ Two rules keep it useful:
 | L0 | `lib/store.js` logic, client registration/render | 3 checks + 1 wrapper |
 | L1 | plugin loading, tool registration, HTTP API, client slots | 5 |
 | L2 | the 8 `watchlist_*` tools | 9 |
-| L3 | settings page, nav entry, main page, reader, right tab, notifications, language | 8 |
+| L3 | settings page, nav entry, main page, reader, notifications, language | 7 |
 | L4 | files on disk, report format, unread counting, path guards | 5 |
 | L5 | push channels (session / macOS / WeChat) | 3 |
 
@@ -98,9 +98,9 @@ that is the known defect, not a new one.
 
 **L1.4 Every client surface renders.** Settings → Watchlist shows the page; the
 left sidebar lists `关注清单` beside `插件` / `自动化任务` and selecting it shows the
-full page in the centre column; the right sidebar can open the `关注清单` report
-tab; opening a report from that page shows the reader. Any blank surface with a
-console `ReferenceError` fails L1.4 even if the others work.
+full page in the centre column; opening a report from that page's history shows
+the reader. Any blank surface with a console `ReferenceError` fails L1.4 even if
+the others work.
 
 **L1.5 Version.** Settings → Plugins shows `dsh-watchlist` at the version in
 `package.json` (`0.6.0`). A stale version after an edit means the profile link
@@ -247,7 +247,7 @@ change, wait for a poll or reopen the surface before judging it.
   explanation. At least one channel always stays selected.
 - 发一条测试通知 → system notification `关注清单测试通知` (or an inline hint when
   permission is denied / unsupported).
-- 界面语言: 跟随 DSH / 中文 / English; see L3.8.
+- 界面语言: 跟随 DSH / 中文 / English; see L3.7.
 - Save feedback: no red error line; the change survives a page reload.
 - The time field patches on every keystroke; an invalid intermediate value falls
   back to `08:30`, so clear it, type the full `HH:MM`, then confirm
@@ -292,24 +292,14 @@ change, wait for a poll or reopen the surface before judging it.
   `### <topic>` line shows up literally as `### <topic>`; treat that as a known
   cosmetic gap and write a case here when it is fixed.
 - Links must open outside the app (system browser) and never replace the card.
-- Buttons: `在侧栏打开`, `用外部程序打开` (macOS only; opens the day file with the
-  system editor), `关闭`.
+- Buttons: `用外部程序打开` (macOS only; opens the day file with the system
+  editor) and `关闭`.
 - Backdrop click and Esc close the reader and return to whatever was underneath
   (the page, or the app itself when the notification opened it).
 - Delete the report file on disk and reopen: the reader shows an error line, not
   a blank card or a crash.
 
-### L3.6 Right sidebar tab
-
-- `在侧栏打开` opens the tab `关注清单` in the right sidebar, titled
-  `关注清单 · <day>`, with the same markdown and an `外部打开` button.
-- Opening it for another run replaces the content (run id travels as tab
-  navigation params, with the module fallback for panes that do not pass params).
-- Tab title follows the interface language.
-- When the sidebar service is unavailable, the reader shows `打开失败：…` and
-  stays usable.
-
-### L3.7 Notifications (macOS)
+### L3.6 Notifications (macOS)
 
 - Test button (L3.1) posts `关注清单测试通知`; its body says clicking should open
   the latest report, and clicking does.
@@ -320,17 +310,16 @@ change, wait for a poll or reopen the surface before judging it.
 - A run with no progress, or older than two hours, posts nothing.
 - No duplicate on refresh: `localStorage["dsh-watchlist-notified-run"]` equals the
   run id.
-- Click → the right tab for that run, or the in-app reader when the tab is not
-  available. The app window comes forward.
+- Click → the in-app reader for that run. The app window comes forward.
 
-### L3.8 Language
+### L3.7 Language
 
 - `跟随 DSH` follows Settings → General → Language; switching DSH language
   updates the plugin's labels without a restart (locale subscription).
 - `中文` and `English` pin the language and override DSH.
 - Any other DSH locale (`ja`, `fr`, …) shows English.
 - Switch both ways and check every surface: settings page, nav label, main page,
-  reader, tab title. A label left untranslated is a dictionary gap;
+  reader. A label left untranslated is a dictionary gap;
   `client-check.mjs` catches missing keys and undefined labels.
 
 ## 7. L4 — data layer
@@ -373,7 +362,7 @@ digests/
 | Channel | Where it lands | Pass | Fails if |
 | --- | --- | --- | --- |
 | `session` | the scheduled session gets the ≤600-character digest | run completes with a summary in that session | agent never prints a summary |
-| `macos` | native notification, one per run | L3.7 | permission denied, channel off, run has no progress |
+| `macos` | native notification, one per run | L3.6 | permission denied, channel off, run has no progress |
 | `wechat` | `notify_wechat` message | digest arrives in WeChat | WeChat plugin missing → falls back to the conversation (not an error) |
 
 The run's brief lists the configured channels; the agent must follow it rather
@@ -429,8 +418,8 @@ For a quick "did the last edit break anything" check:
 | Page says `加载失败` | API route not registered / Host error | `curl` state, Host logs |
 | Main page's reports card empty while files look fine | `runs.json` missing or stale | L4 index consistency, re-run a record |
 | Badge stuck at 0 | `lastSeenAt` newer than entries | L4 unread rule |
-| No notification | permission denied, channel off, no `hasUpdate`, >2 h old, already notified | L3.7 |
-| Notification click opens nothing | sidebar unavailable and reader fallback failed | L3.6, L3.5 |
+| No notification | permission denied, channel off, no `hasUpdate`, >2 h old, already notified | L3.6 |
+| Notification click opens nothing | reader failed to mount or the run id was rejected | L3.5, L3.6 |
 | Nothing fires on schedule | app closed, task paused, auto-run off, empty list | L2.8, L1.1 |
 | Catch-up never happens | topics not due, no `schedule` service | L2.9, L2.5.3 |
 | Report path wrong / split files | `timeZone` changed mid-day | L2.7, L4 |

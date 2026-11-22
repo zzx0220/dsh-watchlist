@@ -26,7 +26,8 @@ progress, write it down, and push a summary.
   history.
 - Settings → Watchlist: the schedule, push and language controls. The page does
   not repeat them; it only reminds you where they are.
-- The right sidebar's report tab, plus the in-app reader for a single report.
+- The in-app reader for a single report, opened from the page's history or from a
+  notification.
 
 ## Why it delegates
 
@@ -43,7 +44,7 @@ Everything lives under `dataDir` (default `$DSH_HOME/watchlist`):
 - `state.json` — schedule task id and last run time
 - `digests/day-YYYY-MM-DD.md` — at most one report file per day; a second
   run on the same day appends one section per run, one entry per topic
-- `digests/runs.json` — the run index the panel and the report tab read
+- `digests/runs.json` — the run index the page's history reads
 
 ## Limitations to keep in mind
 

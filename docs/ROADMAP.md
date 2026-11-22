@@ -41,8 +41,9 @@ concrete spec. Do not implement a guessed design before that.
    `**bold**` plus bare URLs. Paragraphs are plain divs with a 3px vertical margin, so
    there are no code blocks, blockquotes, tables, horizontal rules, nested lists, or a
    third heading level, and no reading column. Both the in-app reader body
-   (`.dwl-reader-body`) and the right-sidebar report tab (inline padding `10px 14px`) feed
-   the same component, so any fix has to look right in both widths.
+   (`.dwl-reader-body`) feeds that component. The right-sidebar report tab this
+   section used to mention was removed with the page rework, so the reader is the
+   only report surface left.
 
 **Progress (2026-11-22)** — the structural half is done on branch `ui/sidebar-panel`:
 the footer entry is gone, the plugin registers a `sidebar.panellist` row beside
@@ -91,7 +92,8 @@ renderer.
    最小实现：`# ` / `## ` 行变成带样式的 div，`-` / `*` 列表收成一个 `<ul>`，行内只认
    `**加粗**` 和裸 URL。段落是 3px 上下边距的普通 div，因此没有代码块、引用、表格、
    分隔线、嵌套列表，也没有第三级标题，更没有阅读栏宽。应用内阅读器正文
-   （`.dwl-reader-body`）和右侧栏报告标签页（内联 `10px 14px` 边距）共用同一个组件，
+   （`.dwl-reader-body`）用同一个组件。本节原先还提到右侧栏报告标签页，它已随整页改造
+   一起移除，现在阅读器是唯一的报告界面，
    所以改法要同时照顾这两种宽度下的观感。
 
 **进展（2026-11-22）**——结构部分已在 `ui/sidebar-panel` 分支完成：左下角入口已移除，

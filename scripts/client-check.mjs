@@ -142,7 +142,6 @@ const EXPECTED = [
   'main#watchlist',
   'sidebar.panellist#watchlist',
   'shell.overlay#watchlist-overlay',
-  'sidebar.right.pane.tab#dsh-watchlist/digest',
 ]
 let failures = 0
 const actual = registered.map((item) => `${item.name}#${item.key || item.id}`)
@@ -238,14 +237,12 @@ function textOf(node, out = []) {
 }
 
 const run = STATE.runs[0]
-const tabProps = { useTabInfo: () => ({ tab: { navigation: { params: { runId: run.id } } } }) }
 active = 'en'
 for (const fn of subs) fn()
 const cases = [
   ['main page', 'main#watchlist', {}, ['主题A', '2026-11-22', 'Next run']],
   ['settings section', 'settings.section#watchlist', {}, ['主题A']],
   ['nav icon', 'sidebar.panellist#watchlist', { size: 16, active: false }, []],
-  ['report tab', 'sidebar.right.pane.tab#dsh-watchlist/digest', tabProps, ['状态：有实质进展']],
   ['reader', 'shell.overlay#watchlist-overlay', {}, ['状态：有实质进展']],
 ]
 for (const [label, key, props, expected] of cases) {
