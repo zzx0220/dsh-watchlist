@@ -270,6 +270,7 @@ export function apply(ctx, config) {
         },
         runs: store.listRuns(dataDir, 14),
         unread: store.unreadCount(dataDir),
+        unreadUpdates: store.unreadUpdateCount(dataDir),
         lastSeenAt: state.lastSeenAt ?? null,
       }
     }

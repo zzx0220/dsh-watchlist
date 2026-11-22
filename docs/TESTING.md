@@ -85,7 +85,7 @@ check Settings → Plugins that `include:watchlist` is enabled, then reload
 curl -s http://127.0.0.1:<port>/dsh-watchlist-api/state | head -c 300
 ```
 
-Pass: `{"ok":true,"dataDir":…,"topics":[…],"settings":{…},"schedule":{…},"runs":[…],"unread":…}`.
+Pass: `{"ok":true,"dataDir":…,"topics":[…],"settings":{…},"schedule":{…},"runs":[…],"unread":…,"unreadUpdates":…}`.
 `ok:false` or 404 means the Host's `webServer` route did not register (it retries
 briefly at load, then gives up); the plugin still works through the tools, only
 the UI is blind.
@@ -260,15 +260,18 @@ change, wait for a poll or reopen the surface before judging it.
   plus label, selected background) rather than a custom button.
 - Collapsed sidebar: only the 16–18px glyph shows, with the same tooltip as the
   other rows.
-- Unread dot on the glyph while entries are unread; it clears after the page or a
-  report is opened, and never reappears for the same entries.
+- Badge on the glyph while a run recorded real progress (`hasUpdate`): the number
+  of those entries, `9+` above nine. A run whose topics all came back quiet adds
+  no badge.
+- The badge survives opening the page on purpose — it clears only when a report is
+  opened (that marks the list seen), and never reappears for the same entries.
 - Selecting the row shows the plugin's page in the centre column and marks the
   row selected; it never opens a modal or a floating panel.
 
 ### L3.3 Main page (the whole list)
 
 - Header: eyebrow label, title, one-line subtitle, `立即运行一次`, and an
-  `N 未读` chip while unread.
+  `N 条新进展` chip while progress is unread.
 - One read-only status line under the header: auto-run dot with 开/关,
   `下次触发 …`, the push channels in use, and the
   `巡检设置：设置 → 关注清单` hint. It carries **no controls** — this page edits
@@ -347,8 +350,12 @@ digests/
   `topic`, `hasUpdate`, `summary`, `sources`, `note`. Migrated legacy runs have
   `legacyFile` instead of `file` and resolve to their old `run-<stamp>.md`.
 - **Unread.** Unread = entries with `at` later than `state.lastSeenAt`; a fresh
-  install (no `lastSeenAt`) counts all entries. Opening the main page or a report
-  marks seen.
+  install (no `lastSeenAt`) counts all entries. Opening a report marks seen;
+  merely opening the main page does not, so the sidebar badge stays until the
+  report is read.
+- **Unread progress.** `unreadUpdates` is the same rule restricted to entries with
+  `hasUpdate: true`; it is what the sidebar badge and the page chip count, so a run
+  that found nothing never flags the entry.
 - **Guards.** `action: "read"` rejects a `runId` that is not
   `run-YYYYMMDDTHHMMSSZ(-N)`; `action: "open"` only accepts `.md` files under
   `<dataDir>/digests` and only on macOS; the whole API rejects non-loopback

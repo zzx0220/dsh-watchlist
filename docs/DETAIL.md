@@ -24,6 +24,8 @@ progress, write it down, and push a summary.
   Selecting it opens the plugin's own page in the centre column: the topic list,
   a read-only status line (auto-run, next run, push channels), and the report
   history.
+  The row carries a count badge for unread entries that reported real progress; it
+  clears when you open a report, not when you glance at the page.
 - Settings → Watchlist: the schedule, push and language controls. The page does
   not repeat them; it only reminds you where they are.
 - The in-app reader for a single report, opened from the page's history or from a

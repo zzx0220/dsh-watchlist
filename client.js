@@ -89,7 +89,7 @@ window.__ModuleLoader__.load({
         noDigest: '还没有巡检记录。',
         lastRun: '上次巡检',
         never: '尚未巡检',
-        unread: '未读',
+        newUpdates: '条新进展',
         close: '关闭',
         entryHint: '点条目直接阅读',
         loading: '加载中…',
@@ -141,7 +141,7 @@ window.__ModuleLoader__.load({
         noDigest: 'No digests yet.',
         lastRun: 'Last run',
         never: 'never',
-        unread: 'unread',
+        newUpdates: 'new',
         close: 'Close',
         entryHint: 'Click an entry to read',
         loading: 'Loading…',
@@ -304,18 +304,20 @@ window.__ModuleLoader__.load({
      * shell.overlay separate copies, so the unread dot and clicks would never agree.
      */
     function uiStore() {
-      if (!window.__dshWatchlistUi) window.__dshWatchlistUi = { reader: null, unread: 0, listeners: new Set() }
+      if (!window.__dshWatchlistUi) window.__dshWatchlistUi = { reader: null, unread: 0, unreadUpdates: 0, listeners: new Set() }
       return window.__dshWatchlistUi
     }
     function notifyUi() {
       for (const listener of uiStore().listeners) listener()
     }
-    /** Publish the unread count from whichever polling component last read the state. */
-    function setUnread(value) {
+    /** Publish both counts from whichever polling component last read the state. */
+    function setCounts(total, updates) {
       const ui = uiStore()
-      const next = Number(value) || 0
-      if (ui.unread === next) return
-      ui.unread = next
+      const nextTotal = Number(total) || 0
+      const nextUpdates = Number(updates) || 0
+      if (ui.unread === nextTotal && ui.unreadUpdates === nextUpdates) return
+      ui.unread = nextTotal
+      ui.unreadUpdates = nextUpdates
       notifyUi()
     }
     function openReader(view) {
@@ -337,7 +339,7 @@ window.__ModuleLoader__.load({
         return () => ui.listeners.delete(listener)
       }, [])
       const ui = uiStore()
-      return { reader: ui.reader, unread: ui.unread }
+      return { reader: ui.reader, unread: ui.unread, unreadUpdates: ui.unreadUpdates }
     }
 
     function useWatchlist() {
@@ -499,9 +501,13 @@ window.__ModuleLoader__.load({
       .dwlp-glyph { position: relative; flex: none; display: inline-flex; align-items: center;
         justify-content: center; line-height: 0; }
       .dwlp-glyph > svg { display: block; }
-      .dwlp-dot { position: absolute; top: 0; right: -1px; width: 6px; height: 6px; border-radius: 50%;
-        background: var(--dsw-alias-button-info-fill, #2b6cf6);
-        box-shadow: 0 0 0 1.5px var(--dsw-alias-bg-layer-1, #fff); }
+      /* Substantive-unread badge: a count, because "one topic moved" and "four did" are
+         different news. The ring uses the sidebar's own fill, not the page's. */
+      .dwlp-badge { position: absolute; top: -5px; right: -7px; min-width: 15px; height: 15px;
+        padding: 0 4px; box-sizing: border-box; border-radius: 8px; text-align: center;
+        background: var(--dsw-alias-button-info-fill, #2b6cf6); color: #fff;
+        font-size: 9.5px; font-weight: 700; line-height: 15px; pointer-events: none;
+        box-shadow: 0 0 0 1.5px var(--dsw-specific-sidebar-fill, var(--dsw-alias-bg-layer-1, #fff)); }
     `
 
     function StyleTag() {
@@ -969,16 +975,13 @@ window.__ModuleLoader__.load({
     /** The sidebar panel: the whole watchlist in one page, selected from the nav list. */
     function WatchlistPanel() {
       useLang()
-      const { state, error, busy, run, reload } = useWatchlist()
-      // Opening the page is reading the list: clear the count the nav dot shows.
-      useEffect(() => {
-        if (!state || !state.unread) return
-        act('seen').then(() => reload())
-      }, [state])
+      const { state, error, busy, run } = useWatchlist()
 
       const settings = (state && state.settings) || {}
       const schedule = (state && state.schedule) || {}
-      const unread = (state && state.unread) || 0
+      // Only real progress badges the entry; opening this page deliberately does not
+      // clear it, so the marker survives a look until a report is actually read.
+      const unread = (state && state.unreadUpdates) || 0
 
       return h(
         'div',
@@ -997,7 +1000,7 @@ window.__ModuleLoader__.load({
           h(
             'div',
             { className: 'dwlp-head-actions' },
-            unread ? h('span', { className: 'dwlp-chip' }, `${unread} ${COPY.unread}`) : null,
+            unread ? h('span', { className: 'dwlp-chip' }, `${unread} ${COPY.newUpdates}`) : null,
             h('button', { className: 'dwl-btn dwlp-primary', disabled: busy, onClick: () => run('run') }, COPY.runNow),
           ),
         ),
@@ -1056,7 +1059,7 @@ window.__ModuleLoader__.load({
      * shifted the glyph every time the panel was selected.
      */
     function WatchlistNavIcon(props) {
-      const { unread } = useUiState()
+      const { unreadUpdates } = useUiState()
       const size = (props && props.size) || 16
       return [
         h(StyleTag, { key: 'style' }),
@@ -1078,7 +1081,9 @@ window.__ModuleLoader__.load({
             h('circle', { cx: 12, cy: 12, r: 4 }),
             h('circle', { cx: 12, cy: 12, r: 1.1, fill: 'currentColor', stroke: 'none' }),
           ),
-          unread > 0 ? h('span', { className: 'dwlp-dot' }) : null,
+          unreadUpdates > 0
+            ? h('span', { className: 'dwlp-badge', title: `${unreadUpdates} ${COPY.newUpdates}` }, unreadUpdates > 9 ? '9+' : String(unreadUpdates))
+            : null,
         ),
       ]
     }
@@ -1191,7 +1196,7 @@ window.__ModuleLoader__.load({
       const { state, reload } = useWatchlist()
       useRunNotifier(state)
       useEffect(() => {
-        setUnread((state && state.unread) || 0)
+        setCounts(state && state.unread, state && state.unreadUpdates)
       }, [state])
       useEffect(() => {
         const timer = setInterval(reload, 60000)

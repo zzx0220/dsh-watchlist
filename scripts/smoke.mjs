@@ -156,8 +156,10 @@ try {
 
   check('unread counts entries after last seen', () => {
     assert.equal(store.unreadCount(dir), 3)
+    assert.equal(store.unreadUpdateCount(dir), 1, 'only the entry with progress badges the nav')
     store.markSeen(dir)
     assert.equal(store.unreadCount(dir), 0)
+    assert.equal(store.unreadUpdateCount(dir), 0)
   })
 
   check('remove by name, then by id', () => {

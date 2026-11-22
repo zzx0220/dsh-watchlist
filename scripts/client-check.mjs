@@ -18,7 +18,8 @@ import vm from 'node:vm'
 const STATE = {
   ok: true,
   dataDir: '/tmp/watchlist',
-  unread: 2,
+  unread: 3,
+  unreadUpdates: 2,
   topics: [
     { id: 't1', topic: '主题A', keywords: ['关键词'], everyDays: 1, lastCheckedAt: '2026-11-21T08:30:00Z' },
     { id: 't2', topic: '主题B', keywords: [], everyDays: 0, lastCheckedAt: null },
@@ -240,14 +241,14 @@ const run = STATE.runs[0]
 active = 'en'
 for (const fn of subs) fn()
 const cases = [
-  ['main page', 'main#watchlist', {}, ['主题A', '2026-11-22', 'Next run']],
+  ['main page', 'main#watchlist', {}, ['主题A', '2026-11-22', 'Next run', '2 new']],
   ['settings section', 'settings.section#watchlist', {}, ['主题A']],
   ['nav icon', 'sidebar.panellist#watchlist', { size: 16, active: false }, []],
   ['reader', 'shell.overlay#watchlist-overlay', {}, ['状态：有实质进展']],
 ]
 for (const [label, key, props, expected] of cases) {
   // The reader case opens a report first; every other case renders nothing.
-  sandbox.window.__dshWatchlistUi = { reader: key.includes('overlay') ? run : null, unread: 2, listeners: new Set() }
+  sandbox.window.__dshWatchlistUi = { reader: key.includes('overlay') ? run : null, unread: 3, unreadUpdates: 2, listeners: new Set() }
   try {
     const tree = await renderComponent(comps[key], props)
     const joined = textOf(tree).join('\n')
@@ -266,19 +267,41 @@ for (const [label, key, props, expected] of cases) {
 }
 
 // The nav glyph must style itself; the page's <style> unmounts when another panel is selected.
+function nodesOf(tree, out = []) {
+  if (!tree) return out
+  if (Array.isArray(tree)) {
+    tree.forEach((node) => nodesOf(node, out))
+    return out
+  }
+  if (typeof tree !== 'object') return out
+  out.push(tree)
+  ;(tree.children || []).forEach((node) => nodesOf(node, out))
+  return out
+}
+
 {
-  sandbox.window.__dshWatchlistUi = { reader: null, unread: 2, listeners: new Set() }
-  const tree = await renderComponent(comps['sidebar.panellist#watchlist'], { size: 16, active: false })
-  const flat = JSON.stringify(tree)
-  const styled = tree.some((node) => node && node.type === 'style')
-  if (!styled) {
+  sandbox.window.__dshWatchlistUi = { reader: null, unread: 3, unreadUpdates: 2, listeners: new Set() }
+  const nodes = nodesOf(await renderComponent(comps['sidebar.panellist#watchlist'], { size: 16, active: false }))
+  const hasStyle = nodes.some((node) => node.type === 'style')
+  const badges = nodes.filter((node) => node.props && node.props.className === 'dwlp-badge')
+  if (!hasStyle) {
     failures += 1
     console.log('nav icon: FAIL the glyph did not render its own <style>')
-  } else if (!flat.includes('dwlp-dot')) {
+  } else if (badges.length !== 1 || String(badges[0].children[0]) !== '2') {
     failures += 1
-    console.log('nav icon: FAIL the unread dot is missing while unread')
+    console.log('nav icon: FAIL the substantive badge did not render the unread count')
   } else {
-    console.log('nav icon: carries its own style and the unread dot')
+    console.log('nav icon: carries its own style and a "2" badge')
+  }
+
+  // No progress recorded means no badge, however much was written.
+  sandbox.window.__dshWatchlistUi = { reader: null, unread: 5, unreadUpdates: 0, listeners: new Set() }
+  const quiet = nodesOf(await renderComponent(comps['sidebar.panellist#watchlist'], { size: 16, active: false }))
+  if (quiet.some((node) => node.props && node.props.className === 'dwlp-badge')) {
+    failures += 1
+    console.log('nav icon: FAIL a badge rendered without substantive updates')
+  } else {
+    console.log('nav icon: no badge without substantive updates')
   }
 }
 
