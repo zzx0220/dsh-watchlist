@@ -36,9 +36,9 @@ try {
     assert.equal(r.total, 1)
   })
 
-  check('schedule defaults to enabled', () => {
-    assert.equal(store.normalizeSettings({}).schedule.enabled, true)
-    assert.equal(store.normalizeSettings({ schedule: { enabled: false } }).schedule.enabled, false)
+  check('schedule defaults to off', () => {
+    assert.equal(store.normalizeSettings({}).schedule.enabled, false)
+    assert.equal(store.normalizeSettings({ schedule: { enabled: true } }).schedule.enabled, true)
   })
 
   check('settings merge defaults with patch and clamp', () => {

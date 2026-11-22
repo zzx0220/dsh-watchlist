@@ -109,6 +109,19 @@ export function apply(ctx, config) {
 
   const settingsOf = () => store.loadSettings(dataDir, config)
 
+  /**
+   * Scheduling is opt-in. A patch that names a schedule turns it on unless the patch
+   * carries `enabled` itself, so "check every day at 08:30" never leaves a task that
+   * silently does nothing; an explicit `enabled: false` still pauses it.
+   */
+  const withScheduleIntent = (patch) => {
+    if (!patch || typeof patch !== 'object' || Array.isArray(patch)) return patch
+    const schedule = patch.schedule
+    if (!schedule || typeof schedule !== 'object' || Array.isArray(schedule)) return patch
+    if (Object.prototype.hasOwnProperty.call(schedule, 'enabled')) return patch
+    return { ...patch, schedule: { ...schedule, enabled: true } }
+  }
+
   const scheduleService = () => {
     try {
       return typeof ctx.get === 'function' ? ctx.get('schedule') : ctx.schedule
@@ -350,7 +363,8 @@ export function apply(ctx, config) {
             return sendJson(res, 200, { ok: true, topic: updated })
           }
           if (type === 'settings') {
-            const patch = body.patch && typeof body.patch === 'object' ? body.patch : {}
+            const raw = body.patch && typeof body.patch === 'object' ? body.patch : {}
+            const patch = withScheduleIntent(raw)
             const settings = store.saveSettings(dataDir, patch)
             let note = ''
             if (patch.schedule || patch.timeZone || patch.workspaceDir) {
@@ -761,6 +775,7 @@ export function apply(ctx, config) {
           return { message: 'patch 不是合法 JSON，例如：{"lookbackDays":3}', ok: false }
         }
         if (!patch || typeof patch !== 'object' || Array.isArray(patch)) return { message: 'patch 必须是 JSON 对象', ok: false }
+        patch = withScheduleIntent(patch)
         store.saveSettings(dataDir, patch)
       }
       const settings = store.loadSettings(dataDir, config)

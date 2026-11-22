@@ -207,6 +207,12 @@ carries the configured channels; `dataDir` matches the settings page.
 5. `{"schedule":{"time":"09:15"}}` → note `（任务已同步：每天 …）` and the
    Automation task's next run moves to 09:15 (verify with `schedule_list`).
 6. `{"locale":"en"}` → the client page is English after the next state refresh.
+7. Fresh install (or after deleting `settings.json`): `watchlist_list` reports
+   `调度：未开启`, and no task appears in `schedule_list` — a new install must not
+   spend a model call on its own.
+8. `{"schedule":{"time":"09:15"}}` on a paused list → scheduling turns itself on
+   (`enabled: true` lands in `settings.json`) and the task is created. An explicit
+   `{"schedule":{"enabled":false}}` still pauses without changing the time.
 
 ### L2.8 `watchlist_schedule`
 

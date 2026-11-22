@@ -15,7 +15,9 @@
         timeZone: ''
         maxTopicsPerRun: 8
         schedule:
-          enabled: true
+          # Opt in: nothing runs until the user asks for a schedule, so a fresh
+          # install never spends a model call on its own.
+          enabled: false
           frequency: daily
           time: '08:30'
           weekdays:
