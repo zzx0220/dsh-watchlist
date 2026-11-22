@@ -1,12 +1,14 @@
 /**
  * dsh-watchlist — Client half.
  *
- * 三个面：
- *   settings.section      「关注清单」整页：主题增删、巡检设置、推送渠道、日报正文
- *   sidebar.footer.action 侧栏底部图标 + 未读圆点
- *   shell.overlay         未读浮层：最近一次巡检的条目 + 标记已读
+ * Three surfaces:
+ *   settings.section       the full “Watchlist” page: add/remove topics, check
+ *                          settings, push channels, report body
+ *   sidebar.footer.action  footer icon plus an unread dot
+ *   shell.overlay          unread overlay: entries from the latest run, mark as read
  *
- * 数据来自 Host 的 /dsh-watchlist-api（仅回环），Client 不碰文件系统。
+ * Data comes from the host's /dsh-watchlist-api (loopback only); the client half
+ * never touches the filesystem.
  */
 window.__ModuleLoader__.load({
   id: 'dsh-watchlist',
@@ -15,9 +17,9 @@ window.__ModuleLoader__.load({
     const h = React.createElement
     const { useState, useEffect, useCallback } = React
 
-    /* ---------- 语言：设置 > DSH 语言 > 浏览器语言；非中文一律英文 ---------- */
+    /* ---------- Language: setting > DSH locale > browser language; anything but Chinese means English ---------- */
 
-    let langOverride = null // 'zh' | 'en' | null（null = 跟随 DSH）
+    let langOverride = null // 'zh' | 'en' | null (null = follow DSH)
 
     function dshLang() {
       try {
@@ -25,7 +27,7 @@ window.__ModuleLoader__.load({
         const id = snapshot && (snapshot.active || snapshot.id || snapshot.locale || snapshot.language)
         if (typeof id === 'string' && id) return /^zh/i.test(id) ? 'zh' : 'en'
       } catch {
-        /* 没有 locale 服务时退回浏览器语言 */
+        /* No locale service: fall back to the browser language */
       }
       try {
         return /^zh/i.test(navigator.language || '') ? 'zh' : 'en'
@@ -151,7 +153,8 @@ window.__ModuleLoader__.load({
       },
     }
 
-    // 用 Proxy 让既有的 COPY.xxx 永远读到当前语言，不必逐处改写。
+    // A Proxy keeps every existing COPY.xxx read resolving to the current language,
+    // so no call site needs rewriting.
     const COPY = new Proxy({}, { get: (_target, key) => (DICT[currentLang()] || DICT.en)[key] })
 
     const langListeners = new Set()
@@ -190,7 +193,7 @@ window.__ModuleLoader__.load({
       return response.json()
     }
 
-    /** apply() 里拿到的 Client 上下文，组件用它调用 layout / sidebarRight。 */
+    /** Client context from apply(); components use it to reach layout / sidebarRight. */
     let services = null
 
     function currentSessionId() {
@@ -199,7 +202,8 @@ window.__ModuleLoader__.load({
         const value = typeof info === 'function' ? info() : info
         if (typeof value === 'string') return value
         if (!value) return null
-        // 布局 store 的字段名是 activePanelId；主面板键可能是 'conversation'，只接受会话 id 形状。
+        // The layout store names the field activePanelId; the main panel key may be
+        // 'conversation', so only conversation-id shapes are accepted.
         const id = value.activePanelId || value.sessionId || value.id || null
         return typeof id === 'string' && /^session-/.test(id) ? id : null
       } catch {
@@ -207,10 +211,11 @@ window.__ModuleLoader__.load({
       }
     }
 
-    /* ---------- 共享的浮层开关：footer 按钮和 overlay 不在同一棵子树里 ---------- */
+    /* ---------- Shared overlay switch: the footer button and the overlay live in different subtrees ---------- */
     /**
-     * 浮层状态挂在 window 上，而不是模块作用域：Client 模块可能被加载成多份，
-     * 模块级状态会让「footer 按钮」和「shell.overlay」各拿一份，点击永远没有回响。
+     * Overlay state lives on window rather than in module scope: the client module
+     * may be loaded more than once, and module-level state would give the footer
+     * button and shell.overlay separate copies, so clicks would never land.
      */
     function uiStore() {
       if (!window.__dshWatchlistUi) window.__dshWatchlistUi = { open: false, all: false, reader: null, backTo: null, dataRev: 0, listeners: new Set() }
@@ -396,7 +401,7 @@ window.__ModuleLoader__.load({
       return parts
     }
 
-    /** 只覆盖我们自己生成的巡检报告格式：标题、二级标题、列表、链接、粗体。 */
+    /** Covers only the check-report format we generate ourselves: headings, subheadings, lists, links, bold. */
     function Markdown({ text }) {
       const blocks = []
       let bullets = []
@@ -702,7 +707,8 @@ window.__ModuleLoader__.load({
 
     const DIGEST_TAB = 'dsh-watchlist/digest'
 
-    /** 右侧栏日报标签页的当前日期；标签页内容自己订阅它，不依赖 tab 参数。 */
+    /** Current date of the report tab in the right sidebar; the tab body subscribes
+     *  to it instead of relying on tab parameters. */
     const digestTab = { runId: null, listeners: new Set() }
     function setDigestDay(runId) {
       digestTab.runId = runId
@@ -718,7 +724,8 @@ window.__ModuleLoader__.load({
       return digestTab.runId
     }
 
-    /** 在右侧栏打开插件自己的标签页（不经过文件预览，因此与工作区无关）。 */
+    /** Open the plugin's own tab in the right sidebar (not through file preview,
+     *  so it does not depend on the workspace). */
     function openDigestTab(runId) {
       try {
         const sidebar = services && services.sidebarRight
@@ -728,7 +735,7 @@ window.__ModuleLoader__.load({
         try {
           if (services.layout && typeof services.layout.openRightbar === 'function') services.layout.openRightbar(true, false)
         } catch {
-          /* 面板展开失败不影响标签页 */
+          /* A failed panel expansion does not affect the tab */
         }
         return 'ok'
       } catch (error) {
@@ -777,7 +784,7 @@ window.__ModuleLoader__.load({
       )
     }
 
-    /** run-20261122T140500Z → 2026-11-22 14:05（本地时间）；其它输入原样返回。 */
+    /** run-20261122T140500Z → 2026-11-22 14:05 (local time); other inputs pass through unchanged. */
     function fmt(value) {
       const text = String(value || '')
       const match = /^run-(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})/.exec(text)
@@ -966,7 +973,7 @@ window.__ModuleLoader__.load({
             ctx.effect(() => services.locale.subscribe(() => notifyLang()))
           }
         } catch {
-          /* 没有语言服务时只跟随浏览器语言 */
+          /* Without a locale service, follow the browser language only */
         }
         ctx.slots.inject('settings.section', () =>
           ctx.slots.register(

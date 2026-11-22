@@ -1,11 +1,13 @@
 #!/usr/bin/env node
 /**
- * Client 半自检（不依赖 Harness）：
- *   1. 桩 React 执行 client.js，确认注入与四个 slot 注册；
- *   2. 模拟 DSH 语言切换，确认文案跟随 locale.active；
- *   3. 递归渲染四个组件（面板 / 全部 / 阅读窗 / 页脚 / 设置 / 标签页），
- *      能抓到「函数被误删导致渲染时 ReferenceError」这类问题——上一版正是这样丢的。
- * 用法：node scripts/client-check.mjs
+ * Client-half self-check (no Harness required):
+ *   1. run client.js against a stub React, confirming injection and the four
+ *      slot registrations;
+ *   2. simulate a DSH language switch, confirming labels follow locale.active;
+ *   3. render four components recursively (panel / all / reader / footer /
+ *      settings / tab), which catches “a deleted helper blows up at render
+ *      time with ReferenceError” — exactly how the previous version broke.
+ * Usage: node scripts/client-check.mjs
  */
 import fs from 'node:fs'
 import vm from 'node:vm'
@@ -61,10 +63,10 @@ const ctx = {
   effect: (fn) => fn(),
 }
 
-// 静态核对：代码里引用的 COPY.xxx 必须都在两个字典里
+// Static check: every COPY.xxx referenced in the code must exist in both dictionaries
 {
   const used = new Set([...src.matchAll(/COPY\.([A-Za-z0-9_]+)/g)].map((m) => m[1]))
-  used.delete('xxx') // 注释里的示例
+  used.delete('xxx') // the example inside a comment
   const zh = src.slice(src.indexOf('      zh: {'), src.indexOf('      en: {'))
   const en = src.slice(src.indexOf('      en: {'), src.indexOf('    }\n\n    // 用 Proxy'))
   const keysOf = (block) => new Set([...block.matchAll(/^\s{8}([A-Za-z0-9_]+):/gm)].map((m) => m[1]))
@@ -126,9 +128,9 @@ const run = {
 
 let failures = 0
 for (const [label, ui] of [
-  ['面板', { open: true, all: false, reader: null }],
-  ['全部', { open: false, all: true, reader: null }],
-  ['阅读窗', { open: false, all: false, reader: run }],
+  ['panel', { open: true, all: false, reader: null }],
+  ['all', { open: false, all: true, reader: null }],
+  ['reader', { open: false, all: false, reader: run }],
 ]) {
   sandbox.window.__dshWatchlistUi = { ...ui, backTo: 'panel', dataRev: 0, listeners: new Set() }
   try {
@@ -141,9 +143,9 @@ for (const [label, ui] of [
 }
 
 for (const [label, key, props] of [
-  ['页脚', 'sidebar.footer.action#watchlist-footer', { wide: true }],
-  ['设置页', 'settings.section#watchlist', {}],
-  ['标签页', 'sidebar.right.pane.tab#dsh-watchlist/digest', {}],
+  ['footer', 'sidebar.footer.action#watchlist-footer', { wide: true }],
+  ['settings', 'settings.section#watchlist', {}],
+  ['tab', 'sidebar.right.pane.tab#dsh-watchlist/digest', {}],
 ]) {
   try {
     walk(comps[key](props), 0)
@@ -156,11 +158,11 @@ for (const [label, key, props] of [
 
 if (badText.length) {
   failures += 1
-  console.log(`渲染出 undefined 文案: ${JSON.stringify(badText.slice(0, 3))}`)
+  console.log(`rendered an undefined label: ${JSON.stringify(badText.slice(0, 3))}`)
 }
 
 if (failures) {
-  console.error(`\n${failures} 项失败`)
+  console.error(`\n${failures} check(s) failed`)
   process.exit(1)
 }
-console.log('\n全部通过')
+console.log('\nAll checks passed')

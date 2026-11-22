@@ -1,16 +1,22 @@
 /**
  * dsh-watchlist — Host half.
  *
- * 关注清单：把长期想追的主题记下来，按设置定期让 Agent 联网检索进展、落盘成日报，
- * 并按需推送。插件自己不做搜索、不做总结——那两件事交给会话里的 Agent（web_search
- * + 当前模型）；这里只负责「清单、设置、调度、落盘、推送」这些确定性的部分。
+ * A watchlist: note the topics you want to follow long term, let an Agent search
+ * the web for progress on a schedule, write reports to disk, and push summaries
+ * where configured. The plugin does no searching and no summarizing — those two
+ * belong to the session Agent (web_search + the current model); this half owns
+ * only the deterministic parts: topics, settings, scheduling, reports, push.
  *
- * 设计取舍：
- *   - 搜索与总结不重写：复用 web_search / web_fetch 与对话模型，插件只产出 brief。
- *   - 调度不重写：复用 ctx.schedule，任务会出现在 DSH「自动化任务」页面里，用户可暂停。
- *   - 存储用文件：topics.json / settings.json / digests/*.md，人能手改、能手备份。
- *   - 推送按渠道：会话（总是可用）、macOS 通知（本机 osascript）、微信（交给 Agent 调
- *     notify_wechat，插件不耦合微信插件）。
+ * Design trade-offs:
+ *   - No re-implemented search or summarizing: reuse web_search / web_fetch and
+ *     the conversation model; the plugin only produces a brief.
+ *   - No re-implemented scheduling: reuse ctx.schedule, so the task shows up in
+ *     the DSH Automation tasks page, where the user can pause or edit it.
+ *   - Storage in files: topics.json / settings.json / digests/*.md — hand
+ *     editable and backup friendly.
+ *   - Push per channel: session (always available), macOS notification (local
+ *     osascript), WeChat (the Agent calls notify_wechat; the plugin does not
+ *     couple to the WeChat plugin).
  */
 import { execFile } from 'node:child_process'
 import { existsSync, readFileSync } from 'node:fs'
@@ -24,7 +30,7 @@ export const inject = ['tools']
 
 const TASK_TITLE = '关注清单巡检'
 
-/** 巡检指令保持稳定：可变的部分全部由 watchlist_run_brief 在运行时给出。 */
+/** The check prompt stays stable: every variable part comes from watchlist_run_brief at run time. */
 const TASK_PROMPT = [
   '【关注清单巡检】',
   '这是一次定期的关注清单巡检，请按以下步骤执行：',
@@ -138,7 +144,8 @@ export function apply(ctx, config) {
     return { taskId: created.id, status: created.status, timing: describeTiming(timing), changed: true, created: true }
   }
 
-  // 加载时后台核对：schedule / webServer 可能比插件晚就绪，短暂重试，失败静默（工具可手动补）。
+  // Verify in the background on load: schedule / webServer may come up after the
+  // plugin, so retry briefly and fail silently (the tools can be triggered by hand).
   const timers = []
   try {
     ctx.effect(() => () => {
@@ -146,7 +153,7 @@ export function apply(ctx, config) {
       timers.length = 0
     })
   } catch {
-    /* 老版本 Cordis 没有 effect：退化为不清理，进程退出自然回收 */
+    /* Older Cordis has no effect: skip cleanup, the process exit reclaims it */
   }
   const whenService = (name, run, attempt = 0) => {
     let service
@@ -173,19 +180,21 @@ export function apply(ctx, config) {
   whenService('schedule', (schedule) => {
     const settings = settingsOf()
     if (!settings.schedule.enabled) return
-    // 新用户清单为空：不建任务、不补检，等第一次 watchlist_add 再建。
+    // A new user has an empty list: create no task and run no catch-up; wait for
+    // the first watchlist_add to create one.
     if (store.loadTopics(dataDir).length === 0) return
     ensureTask(false)
       .then((task) => {
         if (!task || !task.taskId) return undefined
         if (!overdue(settings)) return undefined
-        // 关机/关 App 错过计划时间：启动后补投一轮，窗口由 brief 按「上次巡检到现在」计算。
+        // The scheduled time passed while the machine or app was off: catch up once
+        // after startup; brief defines the window as “last run until now”.
         return Promise.resolve(schedule.run({ id: task.taskId })).catch(() => undefined)
       })
       .catch(() => undefined)
   })
 
-  /* ---------- 给 Client 半用的本机 HTTP 接口（仅回环） ---------- */
+  /* ---------- Loopback-only HTTP API for the client half ---------- */
 
   const readBody = (req) =>
     new Promise((resolve) => {
@@ -229,7 +238,8 @@ export function apply(ctx, config) {
           }
         }
       }
-      // 给 Client 一个「真实存在的会话」用于文档地址授权：优先活着的 Agent，退回任务目标会话。
+      // Hand the client a session that really exists for doc-URL authorization:
+      // prefer a live Agent, fall back to the task's target session.
       let openSessionId = null
       try {
         const agents = typeof ctx.get === 'function' ? ctx.get('agents') : ctx.agents
@@ -365,7 +375,8 @@ export function apply(ctx, config) {
   })
 
 
-  // 让任意会话的 agent 知道关注清单怎么用（可在 cordis.patch.yml 里用 promptHint: false 关掉）。
+  // Tell the agent in any session how the watchlist works (turn off with
+  // promptHint: false in cordis.patch.yml).
   if (config?.promptHint !== false) {
     try {
       const systemPrompt = typeof ctx.get === 'function' ? ctx.get('systemPrompt') : ctx.systemPrompt
@@ -381,7 +392,7 @@ export function apply(ctx, config) {
         )
       }
     } catch {
-      /* 没有 systemPrompt 服务时只依赖工具本身 */
+      /* Without a systemPrompt service, rely on the tool definitions alone */
     }
   }
 
@@ -414,7 +425,7 @@ export function apply(ctx, config) {
         else existed.push(result.topic.topic)
       }
       if (added.length) {
-        // 第一个主题进来后，才把定时任务建起来。
+        // The scheduled task is created only once the first topic arrives.
         const settings = settingsOf()
         if (settings.schedule.enabled) ensureTask(false).catch(() => undefined)
       }

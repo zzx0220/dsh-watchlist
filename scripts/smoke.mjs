@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 /**
- * 无 Harness 也能跑的逻辑自检：清单增删、设置合并、按次巡检的记录与迁移。
- * 用法：node scripts/smoke.mjs
+ * Logic self-check that needs no Harness: topic add/remove, settings merge,
+ * per-run records and migration.
+ * Usage: node scripts/smoke.mjs
  */
 import { mkdtempSync, rmSync, readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -23,14 +24,14 @@ function check(name, fn) {
 
 try {
   check('add creates a topic', () => {
-    const r = store.addTopic(dir, { topic: '某科学进展', keywords: ['关键词A'], note: '看有没有新论文' })
+    const r = store.addTopic(dir, { topic: 'Some scientific advance', keywords: ['keyword-a'], note: 'look for new papers' })
     assert.equal(r.created, true)
     assert.equal(r.total, 1)
     assert.match(r.topic.id, /^t_[0-9a-f]{8}$/)
   })
 
   check('add dedupes by normalized name', () => {
-    const r = store.addTopic(dir, { topic: '  某科学进展  ' })
+    const r = store.addTopic(dir, { topic: '  Some scientific advance  ' })
     assert.equal(r.created, false)
     assert.equal(r.total, 1)
   })
@@ -53,16 +54,16 @@ try {
   check('topics keep their own cadence', () => {
     const cadenceDir = mkdtempSync(join(tmpdir(), 'watchlist-cadence-'))
     try {
-      const daily = store.addTopic(cadenceDir, { topic: '每日主题', everyDays: 1 })
-      const weekly = store.addTopic(cadenceDir, { topic: '每周主题', everyDays: 7 })
+      const daily = store.addTopic(cadenceDir, { topic: 'Daily topic', everyDays: 1 })
+      const weekly = store.addTopic(cadenceDir, { topic: 'Weekly topic', everyDays: 7 })
       assert.equal(daily.topic.everyDays, 1)
       assert.equal(weekly.topic.everyDays, 7)
-      // 都没查过：两条都算到期
+      // Never checked: both count as due
       assert.equal(store.dueTopics(cadenceDir, 1).length, 2)
       store.touchTopics(cadenceDir, [daily.topic.id])
       const due = store.dueTopics(cadenceDir, 1)
-      assert.ok(!due.some((t) => t.id === daily.topic.id), '刚查过的每日主题应到期外')
-      assert.ok(due.some((t) => t.id === weekly.topic.id), '每周主题还没查过，应在到期列表')
+      assert.ok(!due.some((t) => t.id === daily.topic.id), 'a daily topic just checked must not be due')
+      assert.ok(due.some((t) => t.id === weekly.topic.id), 'a weekly topic never checked must be due')
     } finally {
       rmSync(cadenceDir, { recursive: true, force: true })
     }
@@ -71,13 +72,13 @@ try {
   check('updateTopic changes cadence and clears it', () => {
     const updateDir = mkdtempSync(join(tmpdir(), 'watchlist-update-'))
     try {
-      const added = store.addTopic(updateDir, { topic: '可改间隔的主题' })
+      const added = store.addTopic(updateDir, { topic: 'Topic with an editable interval' })
       assert.equal(added.topic.everyDays, null)
       const weekly = store.updateTopic(updateDir, added.topic.id, { everyDays: 7 })
       assert.equal(weekly.everyDays, 7)
-      const cleared = store.updateTopic(updateDir, '可改间隔的主题', { everyDays: null })
+      const cleared = store.updateTopic(updateDir, 'Topic with an editable interval', { everyDays: null })
       assert.equal(cleared.everyDays, null)
-      assert.equal(store.updateTopic(updateDir, '不存在', { everyDays: 1 }), null)
+      assert.equal(store.updateTopic(updateDir, 'does not exist', { everyDays: 1 }), null)
     } finally {
       rmSync(updateDir, { recursive: true, force: true })
     }
@@ -87,9 +88,9 @@ try {
     const from = new Date(Date.now() - 5 * 86400000).toISOString()
     const run = store.startRun(dir, { from })
     assert.match(run.id, /^run-\d{8}T\d{6}Z$/)
-    const r1 = store.appendRunEntry(dir, { topic: '某科学进展', hasUpdate: true, summary: '有新论文', sources: ['论文 - https://example.com/a'] })
+    const r1 = store.appendRunEntry(dir, { topic: 'Some scientific advance', hasUpdate: true, summary: 'new paper', sources: ['paper - https://example.com/a'] })
     assert.equal(r1.runTotal, 1)
-    const r2 = store.appendRunEntry(dir, { topic: '某科学进展', hasUpdate: false, summary: '无更多进展', sources: [] })
+    const r2 = store.appendRunEntry(dir, { topic: 'Some scientific advance', hasUpdate: false, summary: 'no further progress', sources: [] })
     assert.equal(r2.runTotal, 2)
     assert.equal(r1.path, r2.path)
     const text = readFileSync(r2.path, 'utf8')
@@ -102,7 +103,7 @@ try {
   check('a second run today gets its own file', () => {
     store.closeCurrentRun(dir)
     const run = store.startRun(dir, {})
-    store.appendRunEntry(dir, { topic: '某科学进展', hasUpdate: false, summary: '补查', sources: [] })
+    store.appendRunEntry(dir, { topic: 'Some scientific advance', hasUpdate: false, summary: 'catch-up', sources: [] })
     const runs = store.listRuns(dir)
     assert.equal(runs.length, 2)
     assert.notEqual(runs[0].path, runs[1].path)
@@ -116,8 +117,8 @@ try {
   })
 
   check('remove by name, then by id', () => {
-    assert.equal(store.removeTopic(dir, '某科学进展').remaining, 0)
-    const added = store.addTopic(dir, { topic: '第二个主题' })
+    assert.equal(store.removeTopic(dir, 'Some scientific advance').remaining, 0)
+    const added = store.addTopic(dir, { topic: 'Second topic' })
     assert.equal(store.removeTopic(dir, added.topic.id).remaining, 0)
   })
 
@@ -147,7 +148,7 @@ try {
 }
 
 if (failures) {
-  console.error(`\n${failures} 项失败`)
+  console.error(`\n${failures} check(s) failed`)
   process.exit(1)
 }
-console.log('\n全部通过')
+console.log('\nAll checks passed')
