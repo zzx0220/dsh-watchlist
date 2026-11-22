@@ -79,6 +79,7 @@ initial value, runtime changes win and survive upgrades.
 - Each topic can override it: `watchlist_add({ topic: "...", everyDays: 3 })`.
 - A run only picks **due** topics; the report stays one-per-run and contains only that run's entries.
 - When nothing is due, the run is skipped and no empty report is written.
+- The settings page marks the global block as "Default schedule"; the add form and each row can override the interval.
 
 ## Limitations
 

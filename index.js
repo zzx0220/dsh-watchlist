@@ -292,6 +292,15 @@ export function apply(ctx, config) {
             const result = store.removeTopic(dataDir, body.target)
             return sendJson(res, 200, { ok: true, removed: Boolean(result.removed), remaining: result.remaining })
           }
+          if (type === 'update-topic') {
+            const patch = {}
+            if (body.everyDays !== undefined) patch.everyDays = Number(body.everyDays) > 0 ? Number(body.everyDays) : null
+            if (body.note !== undefined) patch.note = String(body.note)
+            if (Array.isArray(body.keywords)) patch.keywords = body.keywords
+            const updated = store.updateTopic(dataDir, String(body.target ?? body.id ?? ''), patch)
+            if (!updated) return sendJson(res, 404, { ok: false, error: '没有这个主题' })
+            return sendJson(res, 200, { ok: true, topic: updated })
+          }
           if (type === 'settings') {
             const patch = body.patch && typeof body.patch === 'object' ? body.patch : {}
             const settings = store.saveSettings(dataDir, patch)
@@ -367,7 +376,7 @@ export function apply(ctx, config) {
             order: 900,
             text:
               '关注清单（watchlist_*）：用户想长期跟进某个话题时，先复述并确认主题措辞，再调用 watchlist_add，' +
-              '并在 note 里写清"什么算有进展"；查看清单用 watchlist_list，删除用 watchlist_remove。',
+              '并在 note 里写清"什么算有进展"；每条可用 everyDays 指定自己的检查间隔（watchlist_update 可改）；查看清单用 watchlist_list，删除用 watchlist_remove。',
           }),
         )
       }
@@ -437,6 +446,30 @@ export function apply(ctx, config) {
         message: `已移除「${result.removed.topic}」，剩 ${result.remaining} 个主题`,
         remaining: result.remaining,
       }
+    },
+  })
+
+  tool({
+    name: 'watchlist_update',
+    description:
+      '修改一条关注主题：单独设置它的检查间隔（everyDays，0 表示跟随全局默认）、备注或关键词。' +
+      '不传的字段保持不变。target 可用 id 或唯一主题名。',
+    parameters: {
+      target: { type: 'string', required: true, description: '主题 id 或主题名' },
+      everyDays: { type: 'number', description: '这条自己的检查间隔（天）；0 = 跟随全局默认' },
+      note: { type: 'string', description: '关注点/备注' },
+      keywords: { type: 'array', items: { type: 'string' }, description: '搜索关键词' },
+    },
+    output: { schema: { type: 'json' }, render: (_args, value) => text(value) },
+    async execute(args) {
+      const patch = {}
+      if (args.everyDays !== undefined) patch.everyDays = Number(args.everyDays) > 0 ? Number(args.everyDays) : null
+      if (args.note !== undefined) patch.note = args.note
+      if (args.keywords !== undefined) patch.keywords = args.keywords
+      const updated = store.updateTopic(dataDir, args.target, patch)
+      if (!updated) return { message: `清单里没有「${args.target}」`, ok: false }
+      const every = updated.everyDays ? `每 ${updated.everyDays} 天` : '跟随全局默认'
+      return { message: `已更新「${updated.topic}」：间隔 ${every}`, ok: true, topic: updated }
     },
   })
 

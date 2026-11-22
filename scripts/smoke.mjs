@@ -68,6 +68,21 @@ try {
     }
   })
 
+  check('updateTopic changes cadence and clears it', () => {
+    const updateDir = mkdtempSync(join(tmpdir(), 'watchlist-update-'))
+    try {
+      const added = store.addTopic(updateDir, { topic: '可改间隔的主题' })
+      assert.equal(added.topic.everyDays, null)
+      const weekly = store.updateTopic(updateDir, added.topic.id, { everyDays: 7 })
+      assert.equal(weekly.everyDays, 7)
+      const cleared = store.updateTopic(updateDir, '可改间隔的主题', { everyDays: null })
+      assert.equal(cleared.everyDays, null)
+      assert.equal(store.updateTopic(updateDir, '不存在', { everyDays: 1 }), null)
+    } finally {
+      rmSync(updateDir, { recursive: true, force: true })
+    }
+  })
+
   check('a run writes one report file per run', () => {
     const from = new Date(Date.now() - 5 * 86400000).toISOString()
     const run = store.startRun(dir, { from })
