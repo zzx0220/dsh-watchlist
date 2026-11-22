@@ -265,6 +265,23 @@ for (const [label, key, props, expected] of cases) {
   }
 }
 
+// The nav glyph must style itself; the page's <style> unmounts when another panel is selected.
+{
+  sandbox.window.__dshWatchlistUi = { reader: null, unread: 2, listeners: new Set() }
+  const tree = await renderComponent(comps['sidebar.panellist#watchlist'], { size: 16, active: false })
+  const flat = JSON.stringify(tree)
+  const styled = tree.some((node) => node && node.type === 'style')
+  if (!styled) {
+    failures += 1
+    console.log('nav icon: FAIL the glyph did not render its own <style>')
+  } else if (!flat.includes('dwlp-dot')) {
+    failures += 1
+    console.log('nav icon: FAIL the unread dot is missing while unread')
+  } else {
+    console.log('nav icon: carries its own style and the unread dot')
+  }
+}
+
 if (badText.length) {
   failures += 1
   console.log(`rendered an undefined label: ${JSON.stringify(badText.slice(0, 3))}`)

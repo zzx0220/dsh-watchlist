@@ -496,7 +496,9 @@ window.__ModuleLoader__.load({
       .dwlp-empty { font-size: 12px; color: var(--dsw-alias-label-secondary, #666); padding: 6px 0; }
 
       /* Nav glyph: the sidebar owns the row, button and label; this is only the mark. */
-      .dwlp-glyph { position: relative; display: inline-flex; align-items: center; justify-content: center; }
+      .dwlp-glyph { position: relative; flex: none; display: inline-flex; align-items: center;
+        justify-content: center; line-height: 0; }
+      .dwlp-glyph > svg { display: block; }
       .dwlp-dot { position: absolute; top: 0; right: -1px; width: 6px; height: 6px; border-radius: 50%;
         background: var(--dsw-alias-button-info-fill, #2b6cf6);
         box-shadow: 0 0 0 1.5px var(--dsw-alias-bg-layer-1, #fff); }
@@ -1047,30 +1049,38 @@ window.__ModuleLoader__.load({
       )
     }
 
-    /** Nav mark: the sidebar owns the row, label and selected state; this is only the glyph. */
+    /**
+     * Nav mark: the sidebar owns the row, label and selected state; this is only the
+     * glyph. It carries its own StyleTag on purpose — the icon stays mounted while the
+     * page does not, and without these rules the unread dot fell back into the flow and
+     * shifted the glyph every time the panel was selected.
+     */
     function WatchlistNavIcon(props) {
       const { unread } = useUiState()
       const size = (props && props.size) || 16
-      return h(
-        'span',
-        { className: 'dwlp-glyph' },
+      return [
+        h(StyleTag, { key: 'style' }),
         h(
-          'svg',
-          {
-            width: size,
-            height: size,
-            viewBox: '0 0 24 24',
-            fill: 'none',
-            stroke: 'currentColor',
-            strokeWidth: 1.7,
-            'aria-hidden': 'true',
-          },
-          h('circle', { cx: 12, cy: 12, r: 8.4 }),
-          h('circle', { cx: 12, cy: 12, r: 4 }),
-          h('circle', { cx: 12, cy: 12, r: 1.1, fill: 'currentColor', stroke: 'none' }),
+          'span',
+          { key: 'glyph', className: 'dwlp-glyph' },
+          h(
+            'svg',
+            {
+              width: size,
+              height: size,
+              viewBox: '0 0 24 24',
+              fill: 'none',
+              stroke: 'currentColor',
+              strokeWidth: 1.7,
+              'aria-hidden': 'true',
+            },
+            h('circle', { cx: 12, cy: 12, r: 8.4 }),
+            h('circle', { cx: 12, cy: 12, r: 4 }),
+            h('circle', { cx: 12, cy: 12, r: 1.1, fill: 'currentColor', stroke: 'none' }),
+          ),
+          unread > 0 ? h('span', { className: 'dwlp-dot' }) : null,
         ),
-        unread > 0 ? h('span', { className: 'dwlp-dot' }) : null,
-      )
+      ]
     }
 
     /** run-20261122T140500Z → 2026-11-22 14:05 (local time); other inputs pass through unchanged. */
