@@ -1,39 +1,141 @@
 #!/usr/bin/env node
 /**
- * Client 半自检（不依赖 Harness）：用桩 React 执行 client.js，验证注入与四个 slot 注册，
- * 并模拟 DSH 语言切换，确认文案会跟随 locale 快照的 active 字段。
+ * Client 半自检（不依赖 Harness）：
+ *   1. 桩 React 执行 client.js，确认注入与四个 slot 注册；
+ *   2. 模拟 DSH 语言切换，确认文案跟随 locale.active；
+ *   3. 递归渲染四个组件（面板 / 全部 / 阅读窗 / 页脚 / 设置 / 标签页），
+ *      能抓到「函数被误删导致渲染时 ReferenceError」这类问题——上一版正是这样丢的。
  * 用法：node scripts/client-check.mjs
  */
 import fs from 'node:fs'
 import vm from 'node:vm'
-const src = fs.readFileSync('client.js', 'utf8')
+
+const src = fs.readFileSync(new URL('../client.js', import.meta.url), 'utf8')
 let def
 const sandbox = {
   window: { __ModuleLoader__: { load: (d) => { def = d } }, addEventListener() {}, removeEventListener() {} },
   navigator: { language: 'zh-CN' },
-  fetch: async () => ({ json: async () => ({ ok: true }) }),
-  setInterval: () => 0, clearInterval() {}, setTimeout: () => 0, console,
+  fetch: async () => ({ json: async () => ({ ok: true, text: '# 报告\n\n## 主题\n\n- 状态：有实质进展' }) }),
+  setInterval: () => 0,
+  clearInterval() {},
+  setTimeout: () => 0,
+  console,
 }
 vm.createContext(sandbox)
 vm.runInContext(src, sandbox)
-const React = { createElement: () => null, useState: () => [null, () => {}], useEffect: () => {}, useCallback: (f) => f }
-const mod = def.factory((n) => (n === 'react' ? React : {}))
+
+const React = {
+  createElement: (type, props, ...children) => ({ type, props: props || {}, children }),
+  useState: (init) => [typeof init === 'function' ? init() : init, () => {}],
+  useEffect: (fn) => {
+    try {
+      const cleanup = fn()
+      if (typeof cleanup === 'function') cleanup()
+    } catch (error) {
+      console.log('EFFECT THROW:', error.message)
+    }
+  },
+  useCallback: (fn) => fn,
+}
+const mod = def.factory((name) => (name === 'react' ? React : {}))
+
 const registered = []
+const comps = {}
 let active = 'en'
 const subs = new Set()
 const ctx = {
-  slots: { inject(k, cb) { cb() }, register(o) { registered.push(o); return () => {} } },
-  sidebarRightTabs: { register() { return () => {} } },
-  sidebarRight: {}, layout: {},
-  locale: { getLocale: () => ({ active, locales: [], revision: 0 }), subscribe(fn) { subs.add(fn); return () => subs.delete(fn) } },
-  effect(fn) { return fn() },
+  slots: {
+    inject(_key, cb) {
+      cb()
+    },
+    register(options, component) {
+      registered.push(options)
+      comps[`${options.name}#${options.key || options.id}`] = component
+      return () => {}
+    },
+  },
+  sidebarRightTabs: { register: () => () => {} },
+  sidebarRight: {},
+  layout: {},
+  locale: { getLocale: () => ({ active }), subscribe: (fn) => (subs.add(fn), () => subs.delete(fn)) },
+  effect: (fn) => fn(),
 }
+
+console.log('inject:', mod.inject.join(','))
 mod.apply(ctx)
-const labels = registered.filter((o) => typeof o.label === 'function')
-console.log('DSH=active:en  ->', labels.map((o) => o.label()).join(' / '))
+console.log('registered:', registered.map((item) => item.name).join(' | '))
+
+const labels = registered.filter((item) => typeof item.label === 'function')
+console.log('labels(en):', labels.map((item) => item.label()).join(' / '))
 active = 'zh'
 for (const fn of subs) fn()
-console.log('DSH=active:zh  ->', labels.map((o) => o.label()).join(' / '))
+console.log('labels(zh):', labels.map((item) => item.label()).join(' / '))
 active = 'ja'
 for (const fn of subs) fn()
-console.log('DSH=active:ja  ->', labels.map((o) => o.label()).join(' / '))
+console.log('labels(ja):', labels.map((item) => item.label()).join(' / '))
+
+function walk(node, depth) {
+  if (depth > 12 || node == null) return
+  if (Array.isArray(node)) {
+    node.forEach((item) => walk(item, depth))
+    return
+  }
+  if (typeof node !== 'object') return
+  const { type, props, children } = node
+  if (typeof type === 'function') {
+    let out
+    try {
+      out = type(props || {})
+    } catch (error) {
+      throw new Error(`render threw in ${type.name || 'anonymous'}: ${error.message}`)
+    }
+    walk(out, depth + 1)
+    return
+  }
+  ;(children || []).forEach((child) => walk(child, depth))
+}
+
+const run = {
+  id: 'run-20261122T141848Z',
+  path: '/tmp/report.md',
+  from: '2026-11-17T00:00:00Z',
+  to: '2026-11-22T00:00:00Z',
+  startedAt: '2026-11-22T14:18:48Z',
+  entries: [{ at: '2026-11-22T14:18:48Z', topic: '主题A', summary: '摘要', sources: ['来源 - https://example.com'] }],
+}
+
+let failures = 0
+for (const [label, ui] of [
+  ['面板', { open: true, all: false, reader: null }],
+  ['全部', { open: false, all: true, reader: null }],
+  ['阅读窗', { open: false, all: false, reader: run }],
+]) {
+  sandbox.window.__dshWatchlistUi = { ...ui, backTo: 'panel', dataRev: 0, listeners: new Set() }
+  try {
+    walk(comps['shell.overlay#watchlist-overlay']({}), 0)
+    console.log(`render ${label}: ok`)
+  } catch (error) {
+    failures += 1
+    console.log(`render ${label}: FAIL ${error.message}`)
+  }
+}
+
+for (const [label, key, props] of [
+  ['页脚', 'sidebar.footer.action#watchlist-footer', { wide: true }],
+  ['设置页', 'settings.section#watchlist', {}],
+  ['标签页', 'sidebar.right.pane.tab#dsh-watchlist/digest', {}],
+]) {
+  try {
+    walk(comps[key](props), 0)
+    console.log(`render ${label}: ok`)
+  } catch (error) {
+    failures += 1
+    console.log(`render ${label}: FAIL ${error.message}`)
+  }
+}
+
+if (failures) {
+  console.error(`\n${failures} 项失败`)
+  process.exit(1)
+}
+console.log('\n全部通过')

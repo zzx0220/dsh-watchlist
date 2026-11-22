@@ -360,6 +360,83 @@ window.__ModuleLoader__.load({
       return h('div', { className: 'dwl-err' }, text)
     }
 
+    function inlineNodes(text, keyPrefix) {
+      const parts = []
+      const regex = /(\*\*[^*]+\*\*|https?:\/\/[^\s)>\]]+)/g
+      let last = 0
+      let index = 0
+      let match
+      while ((match = regex.exec(text)) !== null) {
+        if (match.index > last) parts.push(text.slice(last, match.index))
+        const token = match[0]
+        if (token.startsWith('**')) {
+          parts.push(h('strong', { key: `${keyPrefix}-b${index++}` }, token.slice(2, -2)))
+        } else {
+          parts.push(
+            h(
+              'a',
+              {
+                key: `${keyPrefix}-a${index++}`,
+                href: token,
+                target: '_blank',
+                rel: 'noreferrer',
+                style: { color: 'var(--dsw-alias-brand-primary, #247bbf)' },
+              },
+              token,
+            ),
+          )
+        }
+        last = match.index + token.length
+      }
+      if (last < text.length) parts.push(text.slice(last))
+      return parts
+    }
+
+    /** 只覆盖我们自己生成的巡检报告格式：标题、二级标题、列表、链接、粗体。 */
+    function Markdown({ text }) {
+      const blocks = []
+      let bullets = []
+      const flush = () => {
+        if (!bullets.length) return
+        blocks.push(
+          h(
+            'ul',
+            { key: `ul${blocks.length}`, style: { margin: '4px 0 8px', paddingLeft: 18 } },
+            bullets.map((item, i) => h('li', { key: i }, inlineNodes(item, `l${blocks.length}-${i}`))),
+          ),
+        )
+        bullets = []
+      }
+      String(text || '')
+        .split('\n')
+        .forEach((raw, lineNo) => {
+          const line = raw.replace(/\s+$/, '')
+          if (!line.trim()) {
+            flush()
+            return
+          }
+          if (line.startsWith('# ')) {
+            flush()
+            blocks.push(h('div', { key: `h${lineNo}`, style: { fontWeight: 600, fontSize: 14, margin: '2px 0 8px' } }, line.slice(2)))
+            return
+          }
+          if (line.startsWith('## ')) {
+            flush()
+            blocks.push(h('div', { key: `h${lineNo}`, style: { fontWeight: 600, margin: '10px 0 4px' } }, line.slice(3)))
+            return
+          }
+          const bullet = /^\s*[-*]\s+(.*)$/.exec(line)
+          if (bullet) {
+            bullets.push(bullet[1])
+            return
+          }
+          flush()
+          blocks.push(h('div', { key: `p${lineNo}`, style: { margin: '3px 0' } }, inlineNodes(line, `p${lineNo}`)))
+        })
+      flush()
+      return h('div', null, blocks)
+    }
+
     function TopicRow({ topic, onRemove, onSetInterval, busy }) {
       const every = topic.everyDays ? String(topic.everyDays) : ''
       return h(
