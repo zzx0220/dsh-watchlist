@@ -298,21 +298,6 @@ window.__ModuleLoader__.load({
       }, [state])
     }
 
-    function currentSessionId() {
-      try {
-        const info = services && services.layout && services.layout.panelInfo
-        const value = typeof info === 'function' ? info() : info
-        if (typeof value === 'string') return value
-        if (!value) return null
-        // The layout store names the field activePanelId; the main panel key may be
-        // 'conversation', so only conversation-id shapes are accepted.
-        const id = value.activePanelId || value.sessionId || value.id || null
-        return typeof id === 'string' && /^session-/.test(id) ? id : null
-      } catch {
-        return null
-      }
-    }
-
     /* ---------- Shared UI state: the nav icon and the reader overlay live in different subtrees ---------- */
     /**
      * This state lives on window rather than in module scope: the client module may
