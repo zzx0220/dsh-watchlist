@@ -269,16 +269,17 @@ change, wait for a poll or reopen the surface before judging it.
 
 - Header: eyebrow label, title, one-line subtitle, `立即运行一次`, and an
   `N 未读` chip while unread.
+- One read-only status line under the header: auto-run dot with 开/关,
+  `下次触发 …`, the push channels in use, and the
+  `巡检设置：设置 → 关注清单` hint. It carries **no controls** — this page edits
+  topics, it does not configure the plugin.
 - Topics card: add row (input + interval + 添加) and one card per topic with name,
   keywords, `上次巡检 …`, its own interval select, and 删除.
-- Default-schedule card: 自动巡检, 频率/时间, 回溯天数/单轮上限, and the
-  `下次触发 …` line with task status.
-- Push card: session and macOS toggles (WeChat disabled), test-notification
-  button and its inline result.
-- Language card: 跟随 DSH / 中文 / English.
 - Reports card: one block per day file, header `YYYY-MM-DD` and `N 次巡检 · M 条`,
   then one row per topic that opens the reader for that file. Empty state
   `还没有巡检记录。`.
+- Schedule, push and language controls appear only in Settings → Watchlist; if
+  they show up here as well, this case fails (duplication was removed on purpose).
 - The page scrolls inside the centre column; the header stays put and nothing
   overflows the column at 480px, 900px, and full width.
 

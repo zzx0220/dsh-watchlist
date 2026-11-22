@@ -242,7 +242,7 @@ const tabProps = { useTabInfo: () => ({ tab: { navigation: { params: { runId: ru
 active = 'en'
 for (const fn of subs) fn()
 const cases = [
-  ['main page', 'main#watchlist', {}, ['主题A', 'Default schedule', '2026-11-22']],
+  ['main page', 'main#watchlist', {}, ['主题A', '2026-11-22', 'Next run']],
   ['settings section', 'settings.section#watchlist', {}, ['主题A']],
   ['nav icon', 'sidebar.panellist#watchlist', { size: 16, active: false }, []],
   ['report tab', 'sidebar.right.pane.tab#dsh-watchlist/digest', tabProps, ['状态：有实质进展']],
@@ -256,6 +256,11 @@ for (const [label, key, props, expected] of cases) {
     const joined = textOf(tree).join('\n')
     const missing = expected.filter((text) => !joined.includes(text))
     if (missing.length) throw new Error(`missing rendered text: ${JSON.stringify(missing)}`)
+    // The main page edits topics only; schedule, push and language controls belong to Settings.
+    if (key === 'main#watchlist') {
+      const stale = ['Default schedule', 'Follow DSH', 'Send a test notification'].filter((text) => joined.includes(text))
+      if (stale.length) throw new Error(`settings controls leaked into the page: ${JSON.stringify(stale)}`)
+    }
     console.log(`render ${label}: ok${expected.length ? ` (state reached: ${expected.join(', ')})` : ''}`)
   } catch (error) {
     failures += 1

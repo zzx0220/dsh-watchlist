@@ -21,9 +21,11 @@ progress, write it down, and push a summary.
 ## Where it shows up
 
 - A `关注清单` row in the left sidebar's panel list, beside Plugins and Automation.
-  Selecting it opens the plugin's own page in the centre column: topics, the
-  default schedule, push channels, interface language, and the report history.
-- Settings → Watchlist: the same controls inside the settings page.
+  Selecting it opens the plugin's own page in the centre column: the topic list,
+  a read-only status line (auto-run, next run, push channels), and the report
+  history.
+- Settings → Watchlist: the schedule, push and language controls. The page does
+  not repeat them; it only reminds you where they are.
 - The right sidebar's report tab, plus the in-app reader for a single report.
 
 ## Why it delegates

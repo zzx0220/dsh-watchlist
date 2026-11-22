@@ -49,6 +49,7 @@ window.__ModuleLoader__.load({
         nav: '关注清单',
         title: '关注清单',
         subtitle: '长期追踪你关心的话题：按次检索进展、落盘日报，并推送到你想要的地方。',
+        openSettings: '巡检设置：设置 → 关注清单',
         dataDir: '数据目录',
         topics: '主题',
         empty: '还没有主题，添加一个想长期追踪的题目。',
@@ -101,6 +102,7 @@ window.__ModuleLoader__.load({
         nav: 'Watchlist',
         title: 'Watchlist',
         subtitle: 'Follow the topics you care about: scheduled searches, a daily digest on disk, and pushes where you want them.',
+        openSettings: 'Schedule settings: Settings → Watchlist',
         dataDir: 'Data',
         topics: 'Topics',
         empty: 'No topics yet. Add something you want to follow.',
@@ -450,6 +452,14 @@ window.__ModuleLoader__.load({
       .dwlp-scroll { flex: 1; min-height: 0; overflow: auto; }
       .dwlp-inner { max-width: 940px; margin: 0 auto; padding: 20px 32px 56px;
         display: flex; flex-direction: column; gap: 16px; }
+      .dwlp-status { display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+        padding: 0 2px; font-size: 12px; color: var(--dsw-alias-label-secondary, #666); }
+      .dwlp-status-item { display: inline-flex; align-items: center; gap: 6px; }
+      .dwlp-status-dot { width: 6px; height: 6px; border-radius: 50%;
+        background: var(--dsw-alias-label-tertiary, #bbb); }
+      .dwlp-status-dot[data-on='true'] { background: var(--dsw-alias-state-success-primary, #1a9c62); }
+      .dwlp-status-hint { margin-left: auto; font-size: 11px;
+        color: var(--dsw-alias-label-tertiary, #999); }
       .dwlp-card { border: 1px solid var(--dsw-alias-border-l1, rgba(0,0,0,.09)); border-radius: 12px;
         background: var(--dsw-alias-bg-layer-2, rgba(0,0,0,.018)); padding: 15px 17px 16px; }
       .dwlp-cardhead { display: flex; align-items: baseline; justify-content: space-between; gap: 14px; margin-bottom: 11px; }
@@ -610,6 +620,28 @@ window.__ModuleLoader__.load({
     }
 
     /* ---------- Shared controls: the settings section and the sidebar page render the same fields ---------- */
+
+    /** Read-only reminder of what the scheduler will do: the page edits topics, not settings. */
+    function StatusLine({ settings, schedule }) {
+      const autoOn = Boolean(settings.schedule && settings.schedule.enabled)
+      const channels = (settings.push && settings.push.channels) || []
+      const channelText = channels.length
+        ? channels.map((channel) => (channel === 'macos' ? COPY.macos : COPY.session)).join(' / ')
+        : '—'
+      return h(
+        'div',
+        { className: 'dwlp-status' },
+        h(
+          'span',
+          { className: 'dwlp-status-item' },
+          h('span', { className: 'dwlp-status-dot', 'data-on': autoOn ? 'true' : 'false' }),
+          `${COPY.enabled} ${autoOn ? (zh() ? '开' : 'on') : zh() ? '关' : 'off'}`,
+        ),
+        h('span', { className: 'dwlp-status-item' }, `${COPY.next} ${schedule.timing || '—'}`),
+        h('span', { className: 'dwlp-status-item' }, `${COPY.push} ${channelText}`),
+        h('span', { className: 'dwlp-status-hint' }, COPY.openSettings),
+      )
+    }
 
     /** Default schedule: auto-run, frequency and time, lookback and the per-run cap. */
     function ScheduleFields({ settings, schedule, busy, patchSettings, run }) {
@@ -933,7 +965,6 @@ window.__ModuleLoader__.load({
     function WatchlistPanel() {
       useLang()
       const { state, error, busy, run, reload } = useWatchlist()
-      const [notifyNotice, setNotifyNotice] = useState('')
       // Opening the page is reading the list: clear the count the nav dot shows.
       useEffect(() => {
         if (!state || !state.unread) return
@@ -942,7 +973,6 @@ window.__ModuleLoader__.load({
 
       const settings = (state && state.settings) || {}
       const schedule = (state && state.schedule) || {}
-      const patchSettings = (patch) => run('settings', { patch })
       const unread = (state && state.unread) || 0
 
       return h(
@@ -976,6 +1006,7 @@ window.__ModuleLoader__.load({
             !state
               ? h('div', { className: 'dwlp-empty' }, COPY.loading)
               : [
+                  h(StatusLine, { key: 'status', settings, schedule }),
                   h(
                     'section',
                     { key: 'topics', className: 'dwlp-card' },
@@ -995,29 +1026,6 @@ window.__ModuleLoader__.load({
                         run('add', { topic, everyDays: every ? Number(every) : undefined }),
                     }),
                     h(TopicCards, { state, busy, run }),
-                  ),
-                  h(
-                    'section',
-                    { key: 'schedule', className: 'dwlp-card' },
-                    h(
-                      'div',
-                      { className: 'dwlp-cardhead' },
-                      h('h2', null, COPY.defaultSettings),
-                      h('span', { className: 'dwl-meta' }, COPY.defaultHint),
-                    ),
-                    h(ScheduleFields, { settings, schedule, busy, patchSettings, run }),
-                  ),
-                  h(
-                    'section',
-                    { key: 'push', className: 'dwlp-card' },
-                    h('div', { className: 'dwlp-cardhead' }, h('h2', null, COPY.push)),
-                    h(PushFields, { settings, state, patchSettings, notifyNotice, setNotifyNotice }),
-                  ),
-                  h(
-                    'section',
-                    { key: 'language', className: 'dwlp-card' },
-                    h('div', { className: 'dwlp-cardhead' }, h('h2', null, COPY.language)),
-                    h(LanguageFields, { settings, patchSettings }),
                   ),
                   h(
                     'section',
