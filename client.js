@@ -22,7 +22,7 @@ window.__ModuleLoader__.load({
     function dshLang() {
       try {
         const snapshot = services && services.locale && services.locale.getLocale && services.locale.getLocale()
-        const id = snapshot && (snapshot.id || snapshot.locale || snapshot.language)
+        const id = snapshot && (snapshot.active || snapshot.id || snapshot.locale || snapshot.language)
         if (typeof id === 'string' && id) return /^zh/i.test(id) ? 'zh' : 'en'
       } catch {
         /* 没有 locale 服务时退回浏览器语言 */
