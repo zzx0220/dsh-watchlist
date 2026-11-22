@@ -53,18 +53,28 @@ let def
 /** Bodies the client POSTed, so a passing render still proves the right action was sent. */
 const actions = []
 let allSeen = false
+/** Keep `/state` failing to isolate the counts poll in one case below. */
+let stateDown = false
 const sandbox = {
   window: { __ModuleLoader__: { load: (d) => { def = d } }, addEventListener() {}, removeEventListener() {} },
   navigator: { language: 'zh-CN' },
   fetch: async (url, init) => ({
     json: async () => {
-      if (!String(url).endsWith('/action')) {
-        return allSeen ? { ...STATE, unread: 0, unreadUpdates: 0, unreadRunIds: [] } : STATE
+      const target = String(url)
+      if (target.endsWith('/action')) {
+        const body = init && init.body ? JSON.parse(init.body) : { type: '' }
+        actions.push(body)
+        if (body.type === 'seen') allSeen = true
+        return {
+          ok: true,
+          text: '# 报告\n\n## 主题\n\n- 状态：有实质进展\n- 来源：https://example.com',
+          unread: 0,
+          unreadUpdates: 0,
+        }
       }
-      const body = init && init.body ? JSON.parse(init.body) : { type: '' }
-      actions.push(body)
-      if (body.type === 'seen') allSeen = true
-      return { ok: true, text: '# 报告\n\n## 主题\n\n- 状态：有实质进展\n- 来源：https://example.com', unread: 0, unreadUpdates: 0 }
+      if (target.endsWith('/counts')) return { ok: true, unread: 0, unreadUpdates: 0, unreadRunIds: [] }
+      if (stateDown) return { ok: false, error: 'state unavailable' }
+      return allSeen ? { ...STATE, unread: 0, unreadUpdates: 0, unreadRunIds: [] } : STATE
     },
   }),
   setInterval: () => 0,
@@ -334,6 +344,26 @@ function nodesOf(tree, out = []) {
     console.log('reader: FAIL the read did not bump the data revision other surfaces watch')
   } else {
     console.log('reader: marks its own report, applies counts and bumps the revision')
+  }
+}
+
+// While the user is elsewhere, the badge must still move: the overlay polls counts.
+{
+  stateDown = true
+  allSeen = false
+  actions.length = 0
+  sandbox.window.__dshWatchlistUi = { reader: null, unread: 3, unreadUpdates: 3, dataRev: 0, listeners: new Set() }
+  await renderComponent(comps['shell.overlay#watchlist-overlay'], {})
+  stateDown = false
+  const ui = sandbox.window.__dshWatchlistUi
+  if (ui.unread !== 0 || ui.unreadUpdates !== 0) {
+    failures += 1
+    console.log(`badge: FAIL the counts poll did not reach the shared store (${ui.unread}/${ui.unreadUpdates})`)
+  } else if (ui.dataRev < 1) {
+    failures += 1
+    console.log('badge: FAIL a counts change did not bump the data revision')
+  } else {
+    console.log('badge: counts poll updates the shared store and wakes the open surfaces')
   }
 }
 

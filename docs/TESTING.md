@@ -86,6 +86,8 @@ curl -s http://127.0.0.1:<port>/dsh-watchlist-api/state | head -c 300
 ```
 
 Pass: `{"ok":true,"dataDir":…,"topics":[…],"settings":{…},"schedule":{…},"runs":[…],"unread":…,"unreadUpdates":…,"unreadRunIds":[…]}`.
+`/dsh-watchlist-api/counts` answers the same three counters alone and is what the
+client polls every five seconds; `action: "seen"` also answers with them.
 `ok:false` or 404 means the Host's `webServer` route did not register (it retries
 briefly at load, then gives up); the plugin still works through the tools, only
 the UI is blind.
@@ -309,6 +311,13 @@ change, wait for a poll or reopen the surface before judging it.
   page/settings sections refetch on a shared data revision, so the `未读` tags of the
   report just read disappear while the reader is still open. An older `/state`
   response landing late must not resurrect the count (overlapping reads are ordered).
+- `全部已读` clears the badge immediately, without closing the page or waiting for a
+  poll.
+- Live badge: sit in a conversation with the watchlist page closed, then let a run
+  record progress (or `watchlist_record` from the agent). Within about five seconds
+  the sidebar badge appears without any navigation — the client polls
+  `/dsh-watchlist-api/counts` (a counts-only read) and every mounted surface refetches
+  when the numbers move. A failed counts poll must not blank the badge.
 - Delete the report file on disk and reopen: the reader shows an error line, not
   a blank card or a crash.
 

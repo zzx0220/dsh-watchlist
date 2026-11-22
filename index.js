@@ -290,6 +290,27 @@ export function apply(ctx, config) {
       },
     }))
 
+    // A badge-sized read: the client polls this every few seconds, so it must stay
+    // cheap and must not build the whole page state.
+    ctx.effect(() => webServer.register({
+      kind: 'exact',
+      path: '/dsh-watchlist-api/counts',
+      async handler(req, res) {
+        if (!isLoopback(req)) return sendJson(res, 403, { ok: false, error: 'loopback only' })
+        if (req.method !== 'GET') return sendJson(res, 405, { ok: false, error: 'GET only' })
+        try {
+          sendJson(res, 200, {
+            ok: true,
+            unread: store.unreadCount(dataDir),
+            unreadUpdates: store.unreadUpdateCount(dataDir),
+            unreadRunIds: store.unseenRunIds(dataDir),
+          })
+        } catch (error) {
+          sendJson(res, 500, { ok: false, error: String(error?.message ?? error) })
+        }
+      },
+    }))
+
     ctx.effect(() => webServer.register({
       kind: 'exact',
       path: '/dsh-watchlist-api/action',

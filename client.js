@@ -181,6 +181,11 @@ window.__ModuleLoader__.load({
 
     const API = '/dsh-watchlist-api'
 
+    async function getCounts() {
+      const response = await fetch(`${API}/counts`, { headers: { accept: 'application/json' } })
+      return response.json()
+    }
+
     async function getState() {
       const response = await fetch(`${API}/state`, { headers: { accept: 'application/json' } })
       return response.json()
@@ -329,7 +334,11 @@ window.__ModuleLoader__.load({
     /** Apply the counts an action already returned, so the badge moves without a refetch. */
     function applyCounts(result) {
       if (!result || result.ok === false) return
-      setCounts(result.unread, result.unreadUpdates)
+      const total = Number(result.unread)
+      const updates = Number(result.unreadUpdates)
+      // Only `seen` answers with counts; any other action must leave the badge alone.
+      if (!Number.isFinite(total) || !Number.isFinite(updates)) return
+      setCounts(total, updates)
     }
     /** Something the server now holds differently: every mounted surface refetches. */
     function bumpData() {
@@ -392,7 +401,10 @@ window.__ModuleLoader__.load({
           try {
             const result = await act(type, payload)
             if (result && result.ok === false) setError(result.error || COPY.saveFailed)
+            applyCounts(result)
             await load()
+            // `全部已读` and friends change state other mounts are showing; let them refetch.
+            bumpData()
             return result
           } catch (cause) {
             setError(String((cause && cause.message) || cause))
@@ -1252,12 +1264,38 @@ window.__ModuleLoader__.load({
       const { state, reload } = useWatchlist()
       useRunNotifier(state)
       useEffect(() => {
-        setCounts(state && state.unread, state && state.unreadUpdates)
+        // Before the first read (or after a failed one) there is nothing to publish;
+        // passing null here would coerce to zero and blank the badge.
+        if (!state) return
+        setCounts(state.unread, state.unreadUpdates)
       }, [state])
       useEffect(() => {
         const timer = setInterval(reload, 60000)
         return () => clearInterval(timer)
       }, [reload])
+      // The badge has to move while the user is somewhere else in the app, so it polls a
+      // tiny counts endpoint instead of waiting for the minute-long full refresh.
+      useEffect(() => {
+        let alive = true
+        const tick = async () => {
+          try {
+            const data = await getCounts()
+            if (!alive || !data || !data.ok) return
+            const ui = uiStore()
+            if (ui.unread === data.unread && ui.unreadUpdates === data.unreadUpdates) return
+            applyCounts(data)
+            bumpData()
+          } catch {
+            /* A failed poll is not an error worth showing; the next one retries */
+          }
+        }
+        tick()
+        const timer = setInterval(tick, 5000)
+        return () => {
+          alive = false
+          clearInterval(timer)
+        }
+      }, [])
       useEffect(() => {
         if (!reader) return undefined
         // Marking one report read is what makes the badge and the history tags move;
