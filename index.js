@@ -423,7 +423,7 @@ export function apply(ctx, config) {
           ...lines,
           `调度：${settings.schedule.enabled ? describeTiming(buildTiming(settings)) : '未开启'}${task ? `｜任务 ${task.status}` : ''}`,
           `推送：${settings.push.channels.join('、') || '无'}`,
-          `回溯：${settings.lookbackDays} 天｜数据目录：${dataDir}`,
+          `窗口：上次巡检到现在（首次默认 ${settings.lookbackDays} 天）｜数据目录：${dataDir}`,
         ].join('\n'),
         dataDir,
         topics: topics.map((t) => ({ id: t.id, topic: t.topic, keywords: t.keywords, lastRunAt: t.lastRunAt })),
