@@ -255,12 +255,10 @@ window.__ModuleLoader__.load({
       return 'ok'
     }
 
-    /** Open a run's report in the in-app reader; fall back to the right sidebar tab. */
+    /** Fall back to the in-app reader when the sidebar tab is unavailable. */
     function openRunReport(run) {
-      if (!run) return
-      if (openReader) {
-        openReader({ runId: run.id, path: run.path, from: run.from, to: run.to }, 'all')
-      }
+      if (!run || !run.id) return
+      openReader({ runId: run.id, path: run.path, from: run.from, to: run.to }, 'all')
     }
 
     function notifyRun(run, test) {
@@ -317,8 +315,6 @@ window.__ModuleLoader__.load({
         writeNotifiedRun(run.id)
       }, [state])
     }
-
-
 
     function currentSessionId() {
       try {
