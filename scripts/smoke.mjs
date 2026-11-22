@@ -228,6 +228,116 @@ try {
     }
   })
 
+  check('a record can carry importance, and every entry gets an id', () => {
+    const impDir = mkdtempSync(join(tmpdir(), 'watchlist-importance-'))
+    try {
+      store.startRun(impDir, {})
+      const high = store.appendRunEntry(impDir, { topic: 'Big news', hasUpdate: true, importance: 'high', summary: 'major' })
+      assert.match(high.entryId, /^e_[0-9a-f]{8}$/)
+      store.appendRunEntry(impDir, { topic: 'Small news', hasUpdate: true, summary: 'minor' })
+      const entries = store.loadRuns(impDir)[0].entries
+      assert.equal(entries[0].id, high.entryId)
+      assert.equal(entries[0].importance, 'high')
+      assert.equal(entries[1].importance, 'normal', 'a record without importance is ordinary news')
+      const text = readFileSync(high.path, 'utf8')
+      assert.equal((text.match(/^- 重要：是$/gm) ?? []).length, 1, 'only the important entry is marked in the report')
+      // An unknown importance value must not leak into the store, but a near miss
+      // (boolean true, upper case) still means what the caller meant.
+      const odd = store.appendRunEntry(impDir, { topic: 'Odd', hasUpdate: true, importance: 'urgent', summary: 'x' })
+      assert.equal(store.loadRuns(impDir)[0].entries.find((entry) => entry.id === odd.entryId).importance, 'normal')
+      assert.equal(store.normalizeImportance(true), 'high')
+      assert.equal(store.normalizeImportance('HIGH'), 'high')
+      assert.equal(store.normalizeImportance(' high '), 'high')
+    } finally {
+      rmSync(impDir, { recursive: true, force: true })
+    }
+  })
+
+  check('records written before entry ids get a stable derived id', () => {
+    const legacyEntryDir = mkdtempSync(join(tmpdir(), 'watchlist-entryid-'))
+    try {
+      mkdirSync(join(legacyEntryDir, 'digests'), { recursive: true })
+      writeFileSync(
+        join(legacyEntryDir, 'digests', 'runs.json'),
+        JSON.stringify({
+          version: 1,
+          runs: [
+            {
+              id: 'run-20260101T000000Z',
+              day: '2026-01-01',
+              startedAt: '2026-01-01T00:00:00Z',
+              entries: [{ at: '2026-01-01T00:00:00Z', topic: 'Old', hasUpdate: true, summary: 'old', sources: [] }],
+            },
+          ],
+        }),
+        'utf8',
+      )
+      const runs = store.loadRuns(legacyEntryDir)
+      assert.equal(runs[0].entries[0].id, 'run-20260101T000000Z:0')
+      assert.equal(runs[0].entries[0].importance, 'normal')
+      // Reading twice must produce the same id: stars point at it.
+      assert.equal(store.loadRuns(legacyEntryDir)[0].entries[0].id, 'run-20260101T000000Z:0')
+    } finally {
+      rmSync(legacyEntryDir, { recursive: true, force: true })
+    }
+  })
+
+  check('a star names one entry and survives reading the report', () => {
+    const starDir = mkdtempSync(join(tmpdir(), 'watchlist-star-'))
+    try {
+      const first = store.appendRunEntry(starDir, { topic: 'Topic A', hasUpdate: true, summary: 'a' })
+      store.appendRunEntry(starDir, { topic: 'Topic B', hasUpdate: true, summary: 'b' })
+      const result = store.setStar(starDir, first.runId, first.entryId, true)
+      assert.equal(result.starred, true)
+      assert.deepEqual(store.starredIds(starDir), [first.entryId])
+      assert.equal(store.starredCount(starDir), 1)
+      store.markSeen(starDir)
+      assert.deepEqual(store.starredIds(starDir), [first.entryId], 'a read report keeps its star')
+      assert.equal(store.setStar(starDir, first.runId, 'e_missing', true), null, 'an unknown entry cannot be starred')
+      store.setStar(starDir, first.runId, first.entryId, false)
+      assert.deepEqual(store.starredIds(starDir), [])
+    } finally {
+      rmSync(starDir, { recursive: true, force: true })
+    }
+  })
+
+  check('highlights are unread important entries plus every star', () => {
+    const bandDir = mkdtempSync(join(tmpdir(), 'watchlist-band-'))
+    try {
+      const high = store.appendRunEntry(bandDir, { topic: 'Major', hasUpdate: true, importance: 'high', summary: 'm' })
+      const normal = store.appendRunEntry(bandDir, { topic: 'Minor', hasUpdate: true, summary: 'n' })
+      let band = store.highlights(bandDir)
+      assert.deepEqual(band.map((item) => item.topic), ['Major'], 'an ordinary entry is not news')
+      assert.equal(band[0].entryId, high.entryId)
+      assert.equal(band[0].unread, true)
+      store.setStar(bandDir, normal.runId, normal.entryId, true)
+      band = store.highlights(bandDir)
+      assert.deepEqual(band.map((item) => item.topic).sort(), ['Major', 'Minor'])
+      store.markSeen(bandDir)
+      band = store.highlights(bandDir)
+      assert.deepEqual(band.map((item) => item.topic), ['Minor'], 'reading retires the agent flag, not the star')
+      store.setStar(bandDir, normal.runId, normal.entryId, false)
+      assert.deepEqual(store.highlights(bandDir), [])
+    } finally {
+      rmSync(bandDir, { recursive: true, force: true })
+    }
+  })
+
+  check('counters count unread important entries apart from progress', () => {
+    const countDir = mkdtempSync(join(tmpdir(), 'watchlist-count-'))
+    try {
+      store.appendRunEntry(countDir, { topic: 'X', hasUpdate: true, importance: 'high', summary: 'x' })
+      store.appendRunEntry(countDir, { topic: 'Y', hasUpdate: true, summary: 'y' })
+      const counts = store.counters(countDir)
+      assert.equal(counts.unreadUpdates, 2)
+      assert.equal(counts.unreadImportant, 1)
+      store.markSeen(countDir)
+      assert.equal(store.counters(countDir).unreadImportant, 0)
+    } finally {
+      rmSync(countDir, { recursive: true, force: true })
+    }
+  })
+
   check('remove by name, then by id', () => {
     assert.equal(store.removeTopic(dir, 'Some scientific advance').remaining, 0)
     const added = store.addTopic(dir, { topic: 'Second topic' })

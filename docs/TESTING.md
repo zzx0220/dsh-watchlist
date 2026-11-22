@@ -190,6 +190,10 @@ carries the configured channels; `dataDir` matches the settings page.
 7. After a topic is recorded, `topics.json` shows a fresh `lastCheckedAt` and
    `lastRunAt`; the topic drops out of the next run's due set once the 30-minute
    guard has passed.
+8. `importance: "high"` → the day file section gains `- 重要：是`, the message starts
+   with `【重要】`, and the result carries `entryId` matching `runs.json`. A record
+   without `importance`, or with a stray value, is stored as `normal` and the section
+   has no `重要` line.
 
 ### L2.7 `watchlist_settings`
 
@@ -296,6 +300,12 @@ change, wait for a poll or reopen the surface before judging it.
   they show up here as well, this case fails (duplication was removed on purpose).
 - The page scrolls inside the centre column; the header stays put and nothing
   overflows the column at 480px, 900px, and full width.
+- `重要` band (with an unread `high` entry, a starred entry, or both): it sits between
+  the header and the scroll box, and scrolling the list never moves it. Each row has a
+  `!` flag, the topic, a one-line summary and its own `☆`/`★`; clicking the row opens
+  that run's reader. With neither kind present the band is absent — no empty box.
+- History rows: a `high` entry has an accent bar and an `重要` tag; `☆` stars it and
+  turns into `★` without touching read state or the badge.
 
 ### L3.5 Reader
 
@@ -333,7 +343,8 @@ change, wait for a poll or reopen the surface before judging it.
 - Real run with `push.macos` on and at least one `hasUpdate: true` → exactly one
   notification, posted once the run's last entry is at least 60 s old (the client
   polls every 60 s, so allow up to ~2 minutes). Body names up to three short
-  topic names, then `等 N 个` when more.
+  topic names, then `等 N 个` when more; when the run contains a `high` entry the body
+  starts with `重要：` and names that topic first.
 - A run with no progress, or older than two hours, posts nothing.
 - No duplicate on refresh: `localStorage["dsh-watchlist-notified-run"]` equals the
   run id.
@@ -430,6 +441,7 @@ was not exercised — say which.
 
 | Date | Version | L0 | L1 | L2 | L3 | L4 | L5 | Notes |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 2026-11-23 | 0.7.0 | pass | pass | partial | not run | not run | not run | L0: smoke + client-check, new importance/star/band cases. L1: Host reloaded; `/state` carries `highlights`, `starredIds`, `starred`, `unreadImportant`, and the old entry got a derived id; a `star` → `/state` → `unstar` round-trip worked and was reverted. L2.6.8 and L3 band/star/badge not exercised in the running app |
 | 2026-11-22 | 0.6.0 | pass | pass | partial | not run | not run | not run | baseline: API + `watchlist_list` + `watchlist_schedule sync` verified; 9.1 and 9.2 reproduced |
 
 ## Appendix A — the 10-minute pass

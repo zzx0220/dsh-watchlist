@@ -144,3 +144,37 @@ DSH 的右侧栏是会话作用域的：命令只作用在"屏幕上的会话"�
 窄宽度下右侧栏是否还存在；标签页跟随"当天文件"还是"打开它的那次巡检"。
 
 **状态**：刻意搁置。等第 2 项界面美化、整页的视觉设计定下来之后再回来看，那时候再判断这个场景值不值得多绑一套契约。
+
+### 4. Important information: Agent-flagged and user-starred — done (2026-11-23)
+
+The list records a lot of "nothing to report" and a little news; among the news, some is
+ordinary and some should not wait for the user to open a report. The design splits that
+in two, because the two kinds have different owners and different lifetimes.
+
+**Agent's call.** `watchlist_record` takes `importance: "high" | "normal"`. `hasUpdate`
+answers "did anything happen"; `importance` answers "does the user need to know now".
+Tool description and the scheduled prompt both say to use `high` only for news that
+changes the picture, needs an action, or is a major breakthrough. A high entry is
+written to the digest as `- 重要：是`.
+
+**User's star.** Every entry now carries its own id (`e_…`, derived as `run:<index>` for
+records written before ids existed), so a star points at one finding rather than a whole
+report. `state.json` keeps `starredEntryIds`; stars are pruned to runs still on disk on
+every write. A star survives reading the report — reading retires the Agent's flag,
+because by then it is no longer news, but never clears a star.
+
+**Surfacing.**
+
+- A band under the page header, outside the scroll box: unread `high` entries plus every
+  starred entry, newest first, capped at four. It is absent when empty, so it never
+  steals space from the list.
+- History rows: an accent bar and an `重要` tag for high entries; a `☆`/`★` toggle on
+  every row.
+- Sidebar badge: the number still counts unread progress, but turns amber while any of
+  them is high — "one important" is a different kind of news than "three ordinary".
+- Native notification: content still one line, prefixed `重要：` when the run has a high
+  entry, and the high topics are listed first.
+
+**Verification** — `scripts/smoke.mjs` covers importance round-trip, derived ids for old
+records, star persistence across read, the band's composition, and the counters;
+`scripts/client-check.mjs` covers the band, the star click payload and the amber badge.

@@ -20,6 +20,7 @@ const STATE = {
   dataDir: '/tmp/watchlist',
   unread: 3,
   unreadUpdates: 2,
+  unreadImportant: 1,
   unreadRunIds: ['run-20261122T141848Z'],
   topics: [
     { id: 't1', topic: '主题A', keywords: ['关键词'], everyDays: 1, lastCheckedAt: '2026-11-21T08:30:00Z' },
@@ -42,8 +43,32 @@ const STATE = {
       startedAt: '2026-11-22T14:18:48Z',
       day: '2026-11-22',
       entries: [
-        { at: '2026-11-22T14:18:48Z', topic: '主题A', summary: '摘要', hasUpdate: true, sources: ['来源 - https://example.com'] },
+        {
+          id: 'e_test0001',
+          at: '2026-11-22T14:18:48Z',
+          topic: '主题A',
+          summary: '摘要',
+          hasUpdate: true,
+          importance: 'high',
+          sources: ['来源 - https://example.com'],
+        },
       ],
+    },
+  ],
+  starredIds: [],
+  highlights: [
+    {
+      runId: 'run-20261122T141848Z',
+      entryId: 'e_test0001',
+      at: '2026-11-22T14:18:48Z',
+      topic: '主题A',
+      summary: '摘要',
+      importance: 'high',
+      starred: false,
+      unread: true,
+      path: '/tmp/report.md',
+      from: '2026-11-17T00:00:00Z',
+      to: '2026-11-22T00:00:00Z',
     },
   ],
 }
@@ -260,7 +285,7 @@ const run = STATE.runs[0]
 active = 'en'
 for (const fn of subs) fn()
 const cases = [
-  ['main page', 'main#watchlist', {}, ['主题A', '2026-11-22', 'Next run', '2 new', 'Mark all read', 'Mark all unread', 'Mark read', 'unread']],
+  ['main page', 'main#watchlist', {}, ['主题A', '2026-11-22', 'Next run', '2 new', 'Important', 'Mark all read', 'Mark all unread', 'Mark read', 'unread']],
   ['settings section', 'settings.section#watchlist', {}, ['主题A', 'Mark all read', 'Mark all unread']],
   ['nav icon', 'sidebar.panellist#watchlist', { size: 16, active: false }, []],
   ['reader', 'shell.overlay#watchlist-overlay', {}, ['状态：有实质进展']],
@@ -364,6 +389,47 @@ function nodesOf(tree, out = []) {
     console.log('badge: FAIL a counts change did not bump the data revision')
   } else {
     console.log('badge: counts poll updates the shared store and wakes the open surfaces')
+  }
+}
+
+// The star is the user's own mark: one click must name that entry, not the report,
+// and it must never be sent as a read action.
+{
+  actions.length = 0
+  sandbox.window.__dshWatchlistUi = { reader: null, unread: 3, unreadUpdates: 2, unreadImportant: 1, dataRev: 0, listeners: new Set() }
+  const tree = await renderComponent(comps['main#watchlist'], {})
+  const stars = nodesOf(tree).filter((node) => node.props && node.props.className === 'dwlp-starbtn')
+  if (!stars.length) {
+    failures += 1
+    console.log('star: FAIL no star control rendered')
+  } else {
+    await stars[0].props.onClick()
+    const posted = actions.filter((body) => body.type === 'star' || body.type === 'unstar')
+    if (posted.length !== 1 || posted[0].runId !== run.id || posted[0].entryId !== 'e_test0001') {
+      failures += 1
+      console.log(`star: FAIL expected one star naming e_test0001, got ${JSON.stringify(actions)}`)
+    } else {
+      console.log('star: posts the entry id, not the report id')
+    }
+  }
+}
+
+// An unread important entry is a different kind of news: the count turns amber.
+{
+  sandbox.window.__dshWatchlistUi = { reader: null, unread: 3, unreadUpdates: 2, unreadImportant: 1, dataRev: 0, listeners: new Set() }
+  const hot = nodesOf(await renderComponent(comps['sidebar.panellist#watchlist'], { size: 16, active: false }))
+  const hotBadge = hot.find((node) => node.props && String(node.props.className || '').includes('dwlp-badge-important'))
+  sandbox.window.__dshWatchlistUi = { reader: null, unread: 3, unreadUpdates: 2, unreadImportant: 0, dataRev: 0, listeners: new Set() }
+  const cool = nodesOf(await renderComponent(comps['sidebar.panellist#watchlist'], { size: 16, active: false }))
+  const coolBadge = cool.find((node) => node.props && String(node.props.className || '').includes('dwlp-badge'))
+  if (!hotBadge) {
+    failures += 1
+    console.log('nav icon: FAIL an unread important entry did not switch the badge to its alert look')
+  } else if (!coolBadge || String(coolBadge.props.className).includes('important')) {
+    failures += 1
+    console.log('nav icon: FAIL the alert look leaked into an ordinary badge')
+  } else {
+    console.log('nav icon: alert look only while an important entry is unread')
   }
 }
 

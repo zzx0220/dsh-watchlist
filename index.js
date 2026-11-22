@@ -38,7 +38,8 @@ const TASK_PROMPT = [
   '这是一次定期的关注清单巡检，请按以下步骤执行：',
   '1. 调用 watchlist_run_brief，取得本次要追踪的主题、检索窗口（上次巡检到现在）和推送方式。',
   '2. 对每个主题用 web_search 检索该窗口内的新进展；需要确认细节时用 web_fetch 打开原文。只采信带日期的来源。',
-  '3. 每个主题调用一次 watchlist_record：hasUpdate 表示是否有实质新进展，summary 写一句话结论，sources 附标题和链接。',
+  '3. 每个主题调用一次 watchlist_record：hasUpdate 表示是否有实质新进展；importance 只在确实重大时写 high' +
+    '（会改变判断、需要用户行动、或重大突破），常规更新不写。summary 写一句话结论，sources 附标题和链接。',
   '4. 全部主题记录完后，把本轮情况汇总成不超过 600 字的简报。',
   '5. 按 brief 给出的推送方式推送：含 wechat 且 notify_wechat 可用时调用它发送简报，否则直接在会话里输出。',
   '只做检索、记录、推送；不要下载文件、不要安装软件、不要改清单以外的文件。',
@@ -269,6 +270,9 @@ export function apply(ctx, config) {
           task,
         },
         runs: store.listRuns(dataDir, 14),
+        highlights: store.highlights(dataDir),
+        starredIds: store.starredIds(dataDir),
+        starred: store.starredCount(dataDir),
         ...store.counters(dataDir),
         lastSeenAt: state.lastSeenAt ?? null,
       }
@@ -359,6 +363,17 @@ export function apply(ctx, config) {
               }
             }
             return sendJson(res, 200, { ok: true, settings, note })
+          }
+          if (type === 'star' || type === 'unstar') {
+            // A star names one finding, not a report: the same run can hold one starred
+            // entry and one ordinary one, and reading the report must not clear it.
+            const runId = String(body.runId ?? '').trim()
+            const entryId = String(body.entryId ?? '').trim()
+            if (!RUN_ID_RE.test(runId)) return sendJson(res, 400, { ok: false, error: 'runId 格式不对' })
+            if (!entryId) return sendJson(res, 400, { ok: false, error: '缺少 entryId' })
+            const result = store.setStar(dataDir, runId, entryId, type === 'star')
+            if (!result) return sendJson(res, 404, { ok: false, error: '没有这条记录' })
+            return sendJson(res, 200, { ok: true, starred: result.starred, ...store.counters(dataDir) })
           }
           if (type === 'read') {
             const runId = String(body.runId ?? '').trim()
@@ -634,11 +649,16 @@ export function apply(ctx, config) {
     name: 'watchlist_record',
     description:
       '记录一个主题本次的巡检结果：追加到当日报告文件（每天最多一份；同一天的多次巡检各占一个小节）。每个主题每次巡检调用一次；' +
-      'hasUpdate 为真表示有实质新进展。sources 每行一个来源，写成「标题 - 链接」。',
+      'hasUpdate 为真表示有实质新进展。importance 写 high 表示"用户应当立刻知道"：' +
+      '只有会改变判断、需要用户行动或属于重大突破时才用，常规更新不写。sources 每行一个来源，写成「标题 - 链接」。',
     parameters: {
       topic: { type: 'string', required: true, description: '主题 id 或主题名，来自 watchlist_run_brief' },
       summary: { type: 'string', required: true, description: '一句话结论：有了什么新进展，或为什么没有' },
       hasUpdate: { type: 'boolean', description: '是否有实质新进展，默认 false' },
+      importance: {
+        type: 'string',
+        description: 'high = 需要用户立刻知道（改变判断/需要行动/重大突破）；normal 或留空 = 常规更新',
+      },
       sources: { type: 'array', items: { type: 'string' }, description: '来源，每项「标题 - 链接」' },
       note: { type: 'string', description: '补充说明，可选' },
     },
@@ -652,9 +672,11 @@ export function apply(ctx, config) {
         topics.find((t) => store.normalizeName(t.topic) === store.normalizeName(raw)) ||
         topics.find((t) => store.normalizeName(t.topic).includes(store.normalizeName(raw)))
       if (!hit) return { message: `清单里没有「${raw}」，先 watchlist_add 再加记录`, recorded: false }
+      const importance = store.normalizeImportance(args.importance)
       const result = store.appendRunEntry(dataDir, {
         topic: hit.topic,
         hasUpdate: args.hasUpdate === true,
+        importance,
         summary: args.summary,
         sources: args.sources ?? [],
         note: args.note,
@@ -662,10 +684,12 @@ export function apply(ctx, config) {
       })
       store.touchTopics(dataDir, [hit.id])
       return {
-        message: `已记录「${hit.topic}」→ ${result.path}（本次第 ${result.runTotal} 条｜当日第 ${result.dayTotal} 条）`,
+        message: `${importance === 'high' ? '【重要】' : ''}已记录「${hit.topic}」→ ${result.path}（本次第 ${result.runTotal} 条｜当日第 ${result.dayTotal} 条）`,
         recorded: true,
         path: result.path,
         runId: result.runId,
+        entryId: result.entryId,
+        importance,
         runTotal: result.runTotal,
         dayTotal: result.dayTotal,
         day: result.day,

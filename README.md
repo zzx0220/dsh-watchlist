@@ -12,6 +12,9 @@ summaries where you want them.
   Automation tasks page, so it can be paused, edited, or run manually.
 - **Data stays in files**: `topics.json`, `settings.json`, `digests/*.md` — hand
   editable, backup friendly.
+- **Two kinds of important**: the Agent can mark a finding `high` — it then sits in a
+  band above the page and turns the sidebar count amber while unread; you can star any
+  finding and it stays in that band until you unstar it, read or not.
 
 ## Install
 
@@ -38,9 +41,23 @@ In any conversation:
 | `watchlist_remove` | Remove by id or unique name |
 | `watchlist_list` | Topics, settings, schedule status |
 | `watchlist_run_brief` | Authoritative brief for one run: topics, lookback, push channels |
-| `watchlist_record` | Append one topic's result to today's digest |
+| `watchlist_record` | Append one topic's result to today's digest; optional `importance: "high"` |
 | `watchlist_schedule` | `sync` / `pause` / `resume` / `remove` / `run_now` |
 | `watchlist_settings` | Read or patch settings (JSON patch) |
+
+## Important information
+
+A finding can be important in two ways, and the page treats them differently:
+
+- **The Agent's call** — `watchlist_record({ importance: "high" })` for news that
+  changes the picture or needs an action. While the report is unread it sits in a band
+  directly under the page header (outside the scroll box, so it cannot be missed), gets
+  an accent bar in the history, and turns the sidebar count amber.
+- **Your star** — the `☆` on every history row. A starred finding stays in the band
+  until you unstar it, whether or not you have read the report.
+
+Reading a report retires the Agent's flag, because by then it is no longer news; a star
+is yours and is never cleared that way.
 
 ## Settings
 

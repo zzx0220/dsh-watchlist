@@ -9,6 +9,8 @@
 - 不自己实现总结：复用当前对话模型。
 - 调度交给 `dsh-schedule`：任务出现在「自动化任务」页面，可暂停、可改、可手动跑。
 - 数据是文件：`topics.json`、`settings.json`、`digests/*.md`，能手改、能备份、能同步。
+- 两种「重要」：Agent 可把一条发现标为 `high`，未读时它出现在页面顶部的常驻条里、侧栏
+  数字变琥珀色；你可以给任意一条发现加星标，读过也不会消失，直到你取消。
 
 ## 安装
 
@@ -34,9 +36,20 @@ dsh plugin --profile desktop add /绝对路径/dsh-watchlist
 | `watchlist_remove` | 删主题（id 或唯一名称） |
 | `watchlist_list` | 看清单、设置、调度状态 |
 | `watchlist_run_brief` | 巡检开始时的权威 brief：主题、回溯天数、推送方式 |
-| `watchlist_record` | 记录单个主题的巡检结果到当天日报 |
+| `watchlist_record` | 记录单个主题的巡检结果到当天日报；可选 `importance: "high"` |
 | `watchlist_schedule` | `sync` / `pause` / `resume` / `remove` / `run_now` |
 | `watchlist_settings` | 查看或局部修改设置（JSON patch） |
+
+## 重要信息
+
+一条发现有两种「重要」，页面分开处理：
+
+- **Agent 判定**：`watchlist_record({ importance: "high" })`，用于会改变判断或需要行动的消息。
+  报告未读时它常驻页面标题下方的条带（在滚动区之外，不会被滚走），历史里带强调竖线，
+  侧栏计数变琥珀色。
+- **你的星标**：历史每行的 `☆`。星标条目一直留在顶部条里，直到你取消，与是否已读无关。
+
+读掉一份报告只会清掉 Agent 的标记（那时它已经不是新闻了），不会清掉你的星标。
 
 ## 设置
 

@@ -90,6 +90,11 @@ window.__ModuleLoader__.load({
         lastRun: '上次巡检',
         never: '尚未巡检',
         newUpdates: '条新进展',
+        important: '重要',
+        star: '星标',
+        unstar: '取消星标',
+        bandTitle: '重要',
+        bandHint: '未读的重要进展与你星标的条目',
         markAllRead: '全部已读',
         markAllUnread: '全部未读',
         markRead: '标为已读',
@@ -147,6 +152,11 @@ window.__ModuleLoader__.load({
         lastRun: 'Last run',
         never: 'never',
         newUpdates: 'new',
+        important: 'Important',
+        star: 'Star',
+        unstar: 'Unstar',
+        bandTitle: 'Important',
+        bandHint: 'Unread important progress and the entries you starred',
         markAllRead: 'Mark all read',
         markAllUnread: 'Mark all unread',
         markRead: 'Mark read',
@@ -239,7 +249,12 @@ window.__ModuleLoader__.load({
     }
 
     function composeNotifyBody(entries) {
-      const names = [...new Set(entries.map((entry) => shortTopicName(entry.topic)).filter(Boolean))]
+      // Important entries first: a short notification is one line, and that line
+      // should open with the thing the Agent judged worth interrupting for.
+      const ordered = entries
+        .slice()
+        .sort((a, b) => (b.importance === 'high' ? 1 : 0) - (a.importance === 'high' ? 1 : 0))
+      const names = [...new Set(ordered.map((entry) => shortTopicName(entry.topic)).filter(Boolean))]
       const shown = names.slice(0, 3)
       const more = names.length - shown.length
       const list = shown.join(zh() ? '、' : ', ') + (more > 0 ? (zh() ? ` 等 ${names.length} 个` : ` and ${more} more`) : '')
@@ -264,11 +279,12 @@ window.__ModuleLoader__.load({
       if (!test && !updated.length) return false
       try {
         const title = test ? COPY.notifyTestTitle : COPY.notifyTitle
+        const important = updated.filter((entry) => entry.importance === 'high')
         const body = test
           ? zh()
             ? '点它应打开最近一次巡检报告'
             : 'Clicking it should open the latest report'
-          : composeNotifyBody(updated)
+          : `${important.length ? (zh() ? '重要：' : 'Important: ') : ''}${composeNotifyBody(updated)}`
         const note = new Notification(title, { body })
         note.onclick = () => {
           try {
@@ -320,21 +336,30 @@ window.__ModuleLoader__.load({
      */
     function uiStore() {
       if (!window.__dshWatchlistUi) {
-        window.__dshWatchlistUi = { reader: null, unread: 0, unreadUpdates: 0, dataRev: 0, listeners: new Set() }
+        window.__dshWatchlistUi = {
+          reader: null,
+          unread: 0,
+          unreadUpdates: 0,
+          unreadImportant: 0,
+          dataRev: 0,
+          listeners: new Set(),
+        }
       }
       return window.__dshWatchlistUi
     }
     function notifyUi() {
       for (const listener of uiStore().listeners) listener()
     }
-    /** Publish both counts from whichever component last read the state. */
-    function setCounts(total, updates) {
+    /** Publish the counts from whichever component last read the state. */
+    function setCounts(total, updates, important) {
       const ui = uiStore()
       const nextTotal = Number(total) || 0
       const nextUpdates = Number(updates) || 0
-      if (ui.unread === nextTotal && ui.unreadUpdates === nextUpdates) return
+      const nextImportant = Number(important) || 0
+      if (ui.unread === nextTotal && ui.unreadUpdates === nextUpdates && ui.unreadImportant === nextImportant) return
       ui.unread = nextTotal
       ui.unreadUpdates = nextUpdates
+      ui.unreadImportant = nextImportant
       notifyUi()
     }
     /** Apply the counts an action already returned, so the badge moves without a refetch. */
@@ -342,9 +367,10 @@ window.__ModuleLoader__.load({
       if (!result || result.ok === false) return
       const total = Number(result.unread)
       const updates = Number(result.unreadUpdates)
-      // Only `seen` answers with counts; any other action must leave the badge alone.
+      // Only read/star actions answer with counts; any other action must leave the badge alone.
       if (!Number.isFinite(total) || !Number.isFinite(updates)) return
-      setCounts(total, updates)
+      const important = Number(result.unreadImportant)
+      setCounts(total, updates, Number.isFinite(important) ? important : uiStore().unreadImportant)
     }
     /** Something the server now holds differently: every mounted surface refetches. */
     function bumpData() {
@@ -371,7 +397,13 @@ window.__ModuleLoader__.load({
         return () => ui.listeners.delete(listener)
       }, [])
       const ui = uiStore()
-      return { reader: ui.reader, unread: ui.unread, unreadUpdates: ui.unreadUpdates, dataRev: ui.dataRev }
+      return {
+        reader: ui.reader,
+        unread: ui.unread,
+        unreadUpdates: ui.unreadUpdates,
+        unreadImportant: ui.unreadImportant,
+        dataRev: ui.dataRev,
+      }
     }
 
     function useWatchlist() {
@@ -436,7 +468,20 @@ window.__ModuleLoader__.load({
         },
         [],
       )
-      return { state, error, busy, reload: load, run, markRead }
+      /** Starring is the user's own mark: it never changes read state, only the band. */
+      const markStar = useCallback(async (runId, entryId, on) => {
+        try {
+          const result = await act(on ? 'star' : 'unstar', { runId, entryId })
+          applyCounts(result)
+          bumpData()
+          return result
+        } catch (cause) {
+          const message = String((cause && cause.message) || cause)
+          setError(message)
+          return null
+        }
+      }, [])
+      return { state, error, busy, reload: load, run, markRead, markStar }
     }
 
     const STYLE = `
@@ -565,6 +610,43 @@ window.__ModuleLoader__.load({
       .dwlp-unread::before { content: ''; position: absolute; left: 0; top: 50%; width: 5px; height: 5px;
         margin-top: -2.5px; border-radius: 50%; background: var(--dsw-alias-link, #2b6cf6); }
 
+      /* The band under the header: news the agent called important (until it is read)
+         plus the user's own stars. It sits outside the scroll box, so it cannot be
+         missed by scrolling and does not push the content around when empty. */
+      .dwlp-band { flex: none; display: flex; flex-direction: column; gap: 1px;
+        padding: 9px 32px 10px; border-bottom: 1px solid var(--dsw-alias-border-l1, rgba(0,0,0,.08));
+        background-color: rgba(245, 158, 11, .07);
+        background: color-mix(in srgb, var(--dsw-alias-state-warn-primary, #f59e0b) 7%, transparent); }
+      .dwlp-band-head { display: flex; align-items: baseline; gap: 8px; margin-bottom: 3px; }
+      .dwlp-band-title { font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
+        color: var(--dsw-alias-state-warn-primary, #b45309); }
+      .dwlp-band-hint { font-size: 11px; color: var(--dsw-alias-label-tertiary, #999); }
+      .dwlp-band-row { display: flex; align-items: center; gap: 4px; }
+      .dwlp-band-main { flex: 1; min-width: 0; display: flex; align-items: baseline; gap: 8px;
+        border: 0; background: none; color: inherit; font: inherit; font-size: 12px;
+        text-align: left; padding: 3px 4px; border-radius: 6px; cursor: pointer; }
+      .dwlp-band-main:hover { background: var(--dsw-alias-interactive-bg-hover, rgba(0,0,0,.05)); }
+      .dwlp-band-flag { flex: none; font-size: 10px; font-weight: 700; line-height: 15px; padding: 0 5px;
+        border-radius: 4px; background: var(--dsw-alias-state-warn-primary, #f59e0b); color: #1f1f1f; }
+      .dwlp-band-topic { flex: none; max-width: 38%; overflow: hidden; text-overflow: ellipsis;
+        white-space: nowrap; font-weight: 600; }
+      .dwlp-band-summary { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+        color: var(--dsw-alias-label-secondary, #666); }
+
+      /* History rows: one finding per row, its star on its own, an accent bar when the
+         agent called it important. */
+      .dwlp-item { display: flex; align-items: flex-start;
+        border-top: 1px solid var(--dsw-alias-border-l1, rgba(0,0,0,.06)); }
+      .dwlp-item[data-important='true'] { box-shadow: inset 2px 0 0 var(--dsw-alias-state-warn-primary, #f59e0b); }
+      .dwlp-item .dwlp-entry { border-top: 0; flex: 1; min-width: 0; }
+      .dwlp-tag { display: inline-block; font-size: 10px; font-weight: 700; line-height: 16px;
+        padding: 0 5px; margin-right: 6px; border-radius: 4px; vertical-align: 1px;
+        background: var(--dsw-alias-state-warn-primary, #f59e0b); color: #1f1f1f; }
+      .dwlp-starbtn { flex: none; border: 0; background: none; cursor: pointer; font: inherit;
+        font-size: 13px; line-height: 1; padding: 9px 12px; color: var(--dsw-alias-label-tertiary, #aaa); }
+      .dwlp-starbtn:hover { color: var(--dsw-alias-state-warn-primary, #f59e0b); }
+      .dwlp-starbtn[data-on='true'] { color: var(--dsw-alias-state-warn-primary, #f59e0b); }
+
       /* Nav glyph: the sidebar owns the row, button and label; this is only the mark. */
       .dwlp-glyph { position: relative; flex: none; display: inline-flex; align-items: center;
         justify-content: center; line-height: 0; }
@@ -576,6 +658,9 @@ window.__ModuleLoader__.load({
         background: var(--dsw-alias-button-info-fill, #2b6cf6); color: #fff;
         font-size: 9.5px; font-weight: 700; line-height: 15px; pointer-events: none;
         box-shadow: 0 0 0 1.5px var(--dsw-specific-sidebar-fill, var(--dsw-alias-bg-layer-1, #fff)); }
+      /* Amber count: the same number, but "one of these is important" is a different
+         kind of news than "three ordinary ones". Dark text keeps it readable. */
+      .dwlp-badge-important { background: var(--dsw-alias-state-warn-primary, #f59e0b); color: #1f1f1f; }
     `
 
     function StyleTag() {
@@ -950,9 +1035,10 @@ window.__ModuleLoader__.load({
     }
 
     /** Reports grouped by day file; one entry per topic, clicking opens the reader. */
-    function HistorySection({ state, markRead }) {
+    function HistorySection({ state, markRead, markStar }) {
       const groups = groupRunsByFile((state && state.runs) || [])
       const unread = new Set((state && state.unreadRunIds) || [])
+      const starred = new Set((state && state.starredIds) || [])
       if (!groups.length) return h('div', { className: 'dwlp-empty' }, COPY.noDigest)
       return h(
         'div',
@@ -988,20 +1074,93 @@ window.__ModuleLoader__.load({
                   unread.has(runRecord.id) ? COPY.markRead : COPY.markUnread,
                 ),
               ),
-              ...runRecord.entries.map((entry, index) =>
-                h(
-                  'button',
+              ...runRecord.entries.map((entry, index) => {
+                const isStarred = starred.has(entry.id)
+                return h(
+                  'div',
                   {
-                    key: `${runRecord.id}-${entry.at}-${index}`,
-                    className: 'dwlp-entry',
-                    onClick: () =>
-                      openReader({ runId: runRecord.id, path: runRecord.path, from: runRecord.from, to: runRecord.to }),
+                    key: entry.id || `${runRecord.id}-${index}`,
+                    className: 'dwlp-item',
+                    'data-important': entry.importance === 'high' ? 'true' : 'false',
                   },
-                  h('div', { className: 'dwlp-topic-name' }, entry.topic),
-                  h('div', { className: 'dwl-meta' }, entry.summary),
-                ),
-              ),
+                  h(
+                    'button',
+                    {
+                      className: 'dwlp-entry',
+                      onClick: () =>
+                        openReader({ runId: runRecord.id, path: runRecord.path, from: runRecord.from, to: runRecord.to }),
+                    },
+                    h(
+                      'div',
+                      { className: 'dwlp-topic-name' },
+                      entry.importance === 'high' ? h('span', { className: 'dwlp-tag' }, COPY.important) : null,
+                      entry.topic,
+                    ),
+                    h('div', { className: 'dwl-meta' }, entry.summary),
+                  ),
+                  // The star is outside the row's button: a nested button is invalid HTML
+                  // and swallows the click on some platforms.
+                  h(
+                    'button',
+                    {
+                      className: 'dwlp-starbtn',
+                      'data-on': isStarred ? 'true' : 'false',
+                      title: isStarred ? COPY.unstar : COPY.star,
+                      'aria-label': isStarred ? COPY.unstar : COPY.star,
+                      onClick: () => markStar(runRecord.id, entry.id, !isStarred),
+                    },
+                    isStarred ? '★' : '☆',
+                  ),
+                )
+              }),
             ]),
+          ),
+        ),
+      )
+    }
+
+    /**
+     * The band under the page header: what the user should see before scrolling.
+     * High-importance entries stay while unread; starred entries stay until unstarred.
+     * Empty means no band at all, not an empty box.
+     */
+    function ImportantBand({ state, markStar }) {
+      const items = (state && state.highlights) || []
+      if (!items.length) return null
+      return h(
+        'div',
+        { className: 'dwlp-band' },
+        h(
+          'div',
+          { className: 'dwlp-band-head' },
+          h('span', { className: 'dwlp-band-title' }, COPY.bandTitle),
+          h('span', { className: 'dwlp-band-hint' }, COPY.bandHint),
+        ),
+        items.map((item) =>
+          h(
+            'div',
+            { key: item.entryId, className: 'dwlp-band-row' },
+            h(
+              'button',
+              {
+                className: 'dwlp-band-main',
+                onClick: () => openReader({ runId: item.runId, path: item.path, from: item.from, to: item.to }),
+              },
+              h('span', { className: 'dwlp-band-flag' }, item.importance === 'high' ? '!' : '★'),
+              h('span', { className: 'dwlp-band-topic' }, item.topic),
+              h('span', { className: 'dwlp-band-summary' }, item.summary),
+            ),
+            h(
+              'button',
+              {
+                className: 'dwlp-starbtn',
+                'data-on': item.starred ? 'true' : 'false',
+                title: item.starred ? COPY.unstar : COPY.star,
+                'aria-label': item.starred ? COPY.unstar : COPY.star,
+                onClick: () => markStar(item.runId, item.entryId, !item.starred),
+              },
+              item.starred ? '★' : '☆',
+            ),
           ),
         ),
       )
@@ -1071,7 +1230,7 @@ window.__ModuleLoader__.load({
     /** The sidebar panel: the whole watchlist in one page, selected from the nav list. */
     function WatchlistPanel() {
       useLang()
-      const { state, error, busy, run, reload, markRead } = useWatchlist()
+      const { state, error, busy, run, reload, markRead, markStar } = useWatchlist()
       const { dataRev } = useUiState()
       useEffect(() => {
         reload()
@@ -1106,6 +1265,9 @@ window.__ModuleLoader__.load({
             h('button', { className: 'dwl-btn dwlp-primary', disabled: busy, onClick: () => run('run') }, COPY.runNow),
           ),
         ),
+        // Fixed between the header and the scroll box: the point of the band is that
+        // it is already on screen, not that it is at the top of a long list.
+        state ? h(ImportantBand, { key: 'band', state, markStar }) : null,
         h(
           'div',
           { className: 'dwlp-scroll' },
@@ -1146,7 +1308,7 @@ window.__ModuleLoader__.load({
                       h('h2', null, COPY.digests),
                       h('span', { className: 'dwl-meta' }, COPY.entryHint),
                     ),
-                    h(HistorySection, { state, markRead }),
+                    h(HistorySection, { state, markRead, markStar }),
                   ),
                 ],
           ),
@@ -1161,7 +1323,7 @@ window.__ModuleLoader__.load({
      * shifted the glyph every time the panel was selected.
      */
     function WatchlistNavIcon(props) {
-      const { unreadUpdates } = useUiState()
+      const { unreadUpdates, unreadImportant } = useUiState()
       const size = (props && props.size) || 16
       return [
         h(StyleTag, { key: 'style' }),
@@ -1184,7 +1346,14 @@ window.__ModuleLoader__.load({
             h('circle', { cx: 12, cy: 12, r: 1.1, fill: 'currentColor', stroke: 'none' }),
           ),
           unreadUpdates > 0
-            ? h('span', { className: 'dwlp-badge', title: `${unreadUpdates} ${COPY.newUpdates}` }, unreadUpdates > 9 ? '9+' : String(unreadUpdates))
+            ? h(
+                'span',
+                {
+                  className: `dwlp-badge${unreadImportant > 0 ? ' dwlp-badge-important' : ''}`,
+                  title: `${unreadUpdates} ${COPY.newUpdates}`,
+                },
+                unreadUpdates > 9 ? '9+' : String(unreadUpdates),
+              )
             : null,
         ),
       ]
@@ -1301,7 +1470,7 @@ window.__ModuleLoader__.load({
         // Before the first read (or after a failed one) there is nothing to publish;
         // passing null here would coerce to zero and blank the badge.
         if (!state) return
-        setCounts(state.unread, state.unreadUpdates)
+        setCounts(state.unread, state.unreadUpdates, state.unreadImportant)
       }, [state])
       useEffect(() => {
         const timer = setInterval(reload, 60000)
@@ -1318,7 +1487,7 @@ window.__ModuleLoader__.load({
             const data = await getCounts()
             if (!alive || !data || !data.ok) return
             const ui = uiStore()
-            if (ui.unread === data.unread && ui.unreadUpdates === data.unreadUpdates) return
+            if (ui.unread === data.unread && ui.unreadUpdates === data.unreadUpdates && ui.unreadImportant === data.unreadImportant) return
             applyCounts(data)
             bumpData()
           } catch {
