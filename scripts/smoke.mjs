@@ -9,6 +9,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import assert from 'node:assert/strict'
 import * as store from '../lib/store.js'
+import { COPY, LOCALES, translate } from '../lib/copy.js'
 
 const dir = mkdtempSync(join(tmpdir(), 'watchlist-smoke-'))
 let failures = 0
@@ -106,9 +107,9 @@ try {
     assert.equal(r2.runTotal, 2)
     assert.equal(r2.path, r1.path)
     const text = readFileSync(r2.path, 'utf8')
-    assert.match(text, /^# 关注清单日报 \d{4}-\d{2}-\d{2}$/m)
-    assert.match(text, /^## 第 1 次巡检 \d{2}:\d{2}$/m)
-    assert.match(text, /覆盖区间：/)
+    assert.match(text, /^# Watchlist digest \d{4}-\d{2}-\d{2}$/m)
+    assert.match(text, /^## Check 1 at \d{2}:\d{2}$/m)
+    assert.match(text, /^- Window: /m)
     assert.equal((text.match(/^## /gm) ?? []).length, 1)
     assert.equal((text.match(/^### /gm) ?? []).length, 2)
     assert.equal(store.listRuns(dir).length, 1)
@@ -128,8 +129,8 @@ try {
     assert.equal(r1.path, join(dir, 'digests', `day-${day}.md`))
     const text = readFileSync(r1.path, 'utf8')
     assert.equal((text.match(/^## /gm) ?? []).length, 2, 'one section per run')
-    assert.match(text, /^## 第 2 次巡检 /m)
-    assert.equal((text.match(/^# 关注清单日报 /gm) ?? []).length, 1, 'one day header only')
+    assert.match(text, /^## Check 2 at /m)
+    assert.equal((text.match(/^# Watchlist digest /gm) ?? []).length, 1, 'one day header only')
   })
 
   check('the day is frozen when the run starts, not when it records', () => {
@@ -247,7 +248,7 @@ try {
       assert.equal(entries[0].importance, 'high')
       assert.equal(entries[1].importance, 'normal', 'a record without importance is ordinary news')
       const text = readFileSync(high.path, 'utf8')
-      assert.equal((text.match(/^- 重要：是$/gm) ?? []).length, 1, 'only the important entry is marked in the report')
+      assert.equal((text.match(/^- Important: yes$/gm) ?? []).length, 1, 'only the important entry is marked in the report')
       // An unknown importance value must not leak into the store, but a near miss
       // (boolean true, upper case) still means what the caller meant.
       const odd = store.appendRunEntry(impDir, { topic: 'Odd', hasUpdate: true, importance: 'urgent', summary: 'x' })
@@ -375,6 +376,27 @@ try {
 } finally {
   rmSync(dir, { recursive: true, force: true })
 }
+
+check('copy: every locale carries the same keys', () => {
+  const base = Object.keys(COPY.en).sort()
+  for (const lang of LOCALES) assert.deepEqual(Object.keys(COPY[lang]).sort(), base, `${lang} keys`)
+  assert.equal(translate('zh', 'digest.title', { day: '2026-01-01' }), '# 关注清单日报 2026-01-01')
+  assert.equal(translate('en', 'digest.title', { day: '2026-01-01' }), '# Watchlist digest 2026-01-01')
+  assert.equal(translate('ru', 'digest.title', { day: 'd' }), '# Watchlist digest d', 'unknown locale falls back to English')
+})
+
+check('digest labels follow the requested language', () => {
+  const zhDir = mkdtempSync(join(tmpdir(), 'watchlist-zh-'))
+  try {
+    store.appendRunEntry(zhDir, { topic: '主题A', hasUpdate: true, summary: '有进展', lang: 'zh' })
+    const file = store.listRuns(zhDir)[0].path
+    const text = readFileSync(file, 'utf8')
+    assert.match(text, /^# 关注清单日报 /m)
+    assert.match(text, /^- 状态：有实质进展$/m)
+  } finally {
+    rmSync(zhDir, { recursive: true, force: true })
+  }
+})
 
 if (failures) {
   console.error(`\n${failures} check(s) failed`)

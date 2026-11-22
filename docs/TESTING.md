@@ -48,6 +48,12 @@ Two rules keep it useful:
   panel and the day file are supposed to stay clean.
 - For L3 keep DevTools open: a deleted helper in `client.js` shows up as a
   `ReferenceError` at render time, not at load time.
+- **Language.** Quoted copy below is English, the default when `settings.locale`
+  resolves to English. With `locale: "zh"` (or `"auto"` on a Chinese desktop) the
+  same strings appear in Chinese — `关注清单：N 个主题`, `- 状态：有实质进展`,
+  `# 关注清单日报 <day>` and so on. Check the language first when a message does
+  not match the quoted text: `watchlist_list` prints `时区`/`time zone` and the
+  Settings page follows its own locale switch.
 
 ## 3. L0 — automated checks (no Harness, no data)
 
@@ -379,12 +385,12 @@ digests/
 └── run-<stamp>.md          # legacy per-run files, if migrated
 ```
 
-- **One file per day.** Two runs on the same day append two `## 第 N 次巡检
+- **One file per day.** Two runs on the same day append two `## Check N at
   <time>` sections to the same file; a new day starts a new file. Never a second
   file for the same day in the same timezone.
-- **Section body.** Header `# 关注清单日报 <day>` once per file; per run the
-  `##` section plus `- 覆盖区间：`; per topic `### <topic>`, `- 状态：`,
-  `- 摘要：`, optional `- 来源：` list, optional `- 备注：`.
+- **Section body.** Header `# Watchlist digest <day>` once per file; per run the
+  `##` section plus `- Window:`; per topic `### <topic>`, `- Status:`,
+  `- Summary:`, optional `- Sources:` list, optional `- Note:`.
 - **Index consistency.** Every current run in `runs.json` has `id`, `startedAt`,
   `from`, `to`, `entries`, `file`, `day`, and `seq`; every entry has `at`,
   `topic`, `hasUpdate`, `summary`, `sources`, `note`. Migrated legacy runs have

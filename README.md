@@ -52,7 +52,7 @@ A finding can be important in two ways, and the page treats them differently:
 - **The Agent's call** — `watchlist_record({ importance: "high" })` for news that
   changes the picture or needs an action. While the report is unread it sits in a band
   directly under the page header (outside the scroll box, so it cannot be missed), is
-  tagged `重要` in the history, and turns the sidebar count amber.
+  tagged `important` in the history, and turns the sidebar count amber.
 - **Your star** — the `☆` on every history row. A starred finding stays in the band
   until you unstar it, whether or not you have read the report.
 

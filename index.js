@@ -19,30 +19,35 @@
  *     progress and only after the run stops being written to; clicking it opens
  *     that day's report).
  */
-import { execFile } from 'node:child_process'
+import { execFile, spawnSync } from 'node:child_process'
 import { existsSync, readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join, resolve, sep } from 'node:path'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import * as store from './lib/store.js'
+import { translate } from './lib/copy.js'
 
 export const name = 'watchlist'
 export const inject = ['tools']
 
-const TASK_TITLE = '关注清单巡检'
+/** The copy for every user-visible string lives in lib/copy.js, one table per locale. */
 
-/** The check prompt stays stable: every variable part comes from watchlist_run_brief at run time. */
-const TASK_PROMPT = [
-  '【关注清单巡检】',
-  '这是一次定期的关注清单巡检，请按以下步骤执行：',
-  '1. 调用 watchlist_run_brief，取得本次要追踪的主题、检索窗口（上次巡检到现在）和推送方式。',
-  '2. 对每个主题用 web_search 检索该窗口内的新进展；需要确认细节时用 web_fetch 打开原文。只采信带日期的来源。',
-  '3. 每个主题调用一次 watchlist_record：hasUpdate 表示是否有实质新进展；importance 只在确实重大时写 high' +
-    '（会改变判断、需要用户行动、或重大突破），常规更新不写。summary 写一句话结论，sources 附标题和链接。',
-  '4. 全部主题记录完后，把本轮情况汇总成不超过 600 字的简报。',
-  '5. 按 brief 给出的推送方式推送：把简报输出到会话里；含 macos 时应用内客户端会另发一条系统通知。',
-  '只做检索、记录、推送；不要下载文件、不要安装软件、不要改清单以外的文件。',
-].join('\n')
+/** The OS language stands in for the GUI language while settings.locale is "auto". */
+function detectSystemLang() {
+  const env = `${process.env.LC_ALL ?? ''} ${process.env.LC_MESSAGES ?? ''} ${process.env.LANG ?? ''}`
+  if (/zh/i.test(env)) return 'zh'
+  if (process.platform === 'darwin') {
+    try {
+      const out = spawnSync('defaults', ['read', '-g', 'AppleLanguages'], { encoding: 'utf8', timeout: 1500 })
+      if (/zh/i.test(String(out?.stdout ?? ''))) return 'zh'
+    } catch {
+      /* No `defaults` command: fall through to English */
+    }
+  }
+  return 'en'
+}
+
+const SYSTEM_LANG = detectSystemLang()
 
 function expandHome(value) {
   const text = String(value ?? '').trim()
@@ -92,22 +97,41 @@ function timingMatches(entry, timing) {
   return false
 }
 
-function describeTiming(timing) {
-  if (timing.kind === 'daily') return `每天 ${timing.daily.time}（${timing.daily.time_zone}）`
-  if (timing.kind === 'weekly') {
-    const names = ['一', '二', '三', '四', '五', '六', '日']
-    const days = (timing.weekly.weekdays ?? []).map((d) => `周${names[d - 1] ?? d}`).join('、')
-    return `每${days} ${timing.weekly.time}（${timing.weekly.time_zone}）`
-  }
-  if (timing.kind === 'cron') return `每月 ${timing.cron.expression.split(' ')[2]} 日 ${timing.cron.expression.split(' ')[1]}:${String(timing.cron.expression.split(' ')[0]).padStart(2, '0')}（${timing.cron.time_zone}）`
-  return timing.kind
-}
 
 export function apply(ctx, config) {
   const dataDir = defaultDataDir(config)
   store.ensureLayout(dataDir)
 
   const settingsOf = () => store.loadSettings(dataDir, config)
+
+  /* ---------- Copy: settings.locale, then the OS, then English ---------- */
+
+  // Cached briefly: t() runs many times inside one tool call, and loadSettings reads a file.
+  let langCache = { at: 0, value: SYSTEM_LANG }
+  const hostLang = () => {
+    const now = Date.now()
+    if (now - langCache.at < 2000) return langCache.value
+    const declared = String(settingsOf().locale ?? 'auto')
+    langCache = { at: now, value: declared === 'zh' || declared === 'en' ? declared : SYSTEM_LANG }
+    return langCache.value
+  }
+  const t = (key, vars) => translate(hostLang(), key, vars)
+  // «name» vs “name”: quote marks differ per locale, everything else is in copy.js.
+  const q = (name) => (hostLang() === 'zh' ? `「${name}」` : `“${name}”`)
+  const qList = (names) => names.map(q).join(t('list.sep'))
+
+  const describeTiming = (timing) => {
+    if (timing.kind === 'daily') return t('timing.daily', { time: timing.daily.time, zone: timing.daily.time_zone })
+    if (timing.kind === 'weekly') {
+      const days = (timing.weekly.weekdays ?? []).map((d) => t(`wd.${d}`)).join(t('list.sep'))
+      return t('timing.weekly', { days, time: timing.weekly.time, zone: timing.weekly.time_zone })
+    }
+    if (timing.kind === 'cron') {
+      const [mm, hh, day] = timing.cron.expression.split(' ')
+      return t('timing.monthly', { day, hh: String(hh).padStart(2, '0'), mm, zone: timing.cron.time_zone })
+    }
+    return timing.kind
+  }
 
   /**
    * Scheduling is opt-in. A patch that names a schedule turns it on unless the patch
@@ -134,7 +158,7 @@ export function apply(ctx, config) {
     const settings = settingsOf()
     if (!settings.schedule.enabled) return { skipped: true, reason: 'settings.schedule.enabled = false' }
     const schedule = scheduleService()
-    if (!schedule) return { skipped: true, reason: 'schedule 服务不可用（当前 profile 未挂载 dsh-schedule）' }
+    if (!schedule) return { skipped: true, reason: t('err.noScheduleService') }
     const timing = buildTiming(settings)
     const state = store.loadState(dataDir)
     const target = { kind: 'new_once', create: settings.workspaceDir ? { cwd: settings.workspaceDir } : {} }
@@ -149,7 +173,7 @@ export function apply(ctx, config) {
         return { taskId: state.scheduleTaskId, status: result?.status ?? 'active', timing: describeTiming(timing), changed: true }
       }
     }
-    const created = await schedule.create({ title: TASK_TITLE, prompt: TASK_PROMPT, timing, target })
+    const created = await schedule.create({ title: t('task.title'), prompt: t('task.prompt'), timing, target })
     store.saveState(dataDir, { scheduleTaskId: created.id })
     return { taskId: created.id, status: created.status, timing: describeTiming(timing), changed: true, created: true }
   }
@@ -333,7 +357,7 @@ export function apply(ctx, config) {
             // No runId means "every report"; one runId touches only that report. The
             // write is the only difference, so both actions answer with the new counts.
             const runId = body.runId === undefined || body.runId === null ? '' : String(body.runId).trim()
-            if (runId && !RUN_ID_RE.test(runId)) return sendJson(res, 400, { ok: false, error: 'runId 格式不对' })
+            if (runId && !RUN_ID_RE.test(runId)) return sendJson(res, 400, { ok: false, error: t('err.badRunId') })
             const mark = type === 'seen'
             if (runId) {
               if (mark) store.markRunSeen(dataDir, runId)
@@ -359,7 +383,7 @@ export function apply(ctx, config) {
             if (body.note !== undefined) patch.note = String(body.note)
             if (Array.isArray(body.keywords)) patch.keywords = body.keywords
             const updated = store.updateTopic(dataDir, String(body.target ?? body.id ?? ''), patch)
-            if (!updated) return sendJson(res, 404, { ok: false, error: '没有这个主题' })
+            if (!updated) return sendJson(res, 404, { ok: false, error: t('err.noTopic') })
             return sendJson(res, 200, { ok: true, topic: updated })
           }
           if (type === 'settings') {
@@ -382,17 +406,17 @@ export function apply(ctx, config) {
             // entry and one ordinary one, and reading the report must not clear it.
             const runId = String(body.runId ?? '').trim()
             const entryId = String(body.entryId ?? '').trim()
-            if (!RUN_ID_RE.test(runId)) return sendJson(res, 400, { ok: false, error: 'runId 格式不对' })
-            if (!entryId) return sendJson(res, 400, { ok: false, error: '缺少 entryId' })
+            if (!RUN_ID_RE.test(runId)) return sendJson(res, 400, { ok: false, error: t('err.badRunId') })
+            if (!entryId) return sendJson(res, 400, { ok: false, error: t('err.missingEntryId') })
             const result = store.setStar(dataDir, runId, entryId, type === 'star')
-            if (!result) return sendJson(res, 404, { ok: false, error: '没有这条记录' })
+            if (!result) return sendJson(res, 404, { ok: false, error: t('err.noRecord') })
             return sendJson(res, 200, { ok: true, starred: result.starred, ...store.counters(dataDir) })
           }
           if (type === 'read') {
             const runId = String(body.runId ?? '').trim()
-            if (!RUN_ID_RE.test(runId)) return sendJson(res, 400, { ok: false, error: 'runId 格式不对' })
+            if (!RUN_ID_RE.test(runId)) return sendJson(res, 400, { ok: false, error: t('err.badRunId') })
             const { run, file } = reportOfRun(runId)
-            if (!existsSync(file)) return sendJson(res, 404, { ok: false, error: `没有 ${runId} 的报告文件` })
+            if (!existsSync(file)) return sendJson(res, 404, { ok: false, error: t('err.noReportFile', { runId }) })
             return sendJson(res, 200, {
               ok: true,
               runId,
@@ -407,16 +431,16 @@ export function apply(ctx, config) {
             let file = null
             if (body.runId !== undefined && String(body.runId).trim()) {
               const runId = String(body.runId).trim()
-              if (!RUN_ID_RE.test(runId)) return sendJson(res, 400, { ok: false, error: 'runId 格式不对' })
+              if (!RUN_ID_RE.test(runId)) return sendJson(res, 400, { ok: false, error: t('err.badRunId') })
               file = reportOfRun(runId).file
             } else if (body.path !== undefined && String(body.path).trim()) {
               file = resolve(String(body.path).trim())
             }
-            if (!file) return sendJson(res, 400, { ok: false, error: '需要 runId 或 path' })
-            if (!file.startsWith(resolve(root) + sep)) return sendJson(res, 403, { ok: false, error: '只允许打开日报目录里的文件' })
-            if (!file.endsWith('.md')) return sendJson(res, 400, { ok: false, error: '只允许打开 markdown 日报' })
-            if (!existsSync(file)) return sendJson(res, 404, { ok: false, error: `文件不存在：${file}` })
-            if (process.platform !== 'darwin') return sendJson(res, 400, { ok: false, error: '打开文件目前只支持 macOS' })
+            if (!file) return sendJson(res, 400, { ok: false, error: t('err.needRunIdOrPath') })
+            if (!file.startsWith(resolve(root) + sep)) return sendJson(res, 403, { ok: false, error: t('err.outsideDigestDir') })
+            if (!file.endsWith('.md')) return sendJson(res, 400, { ok: false, error: t('err.notMarkdown') })
+            if (!existsSync(file)) return sendJson(res, 404, { ok: false, error: t('err.fileMissing', { file }) })
+            if (process.platform !== 'darwin') return sendJson(res, 400, { ok: false, error: t('err.macOSOnly') })
             execFile('open', [file], (error) => {
               if (error) sendJson(res, 500, { ok: false, error: String(error.message ?? error) })
               else sendJson(res, 200, { ok: true, path: file })
@@ -425,18 +449,18 @@ export function apply(ctx, config) {
           }
           if (type === 'sync' || type === 'run') {
             const schedule = scheduleService()
-            if (!schedule) return sendJson(res, 400, { ok: false, error: '当前 profile 没有挂载 dsh-schedule' })
+            if (!schedule) return sendJson(res, 400, { ok: false, error: t('err.noScheduleProfile') })
             if (type === 'sync') {
               const result = await ensureTask(true)
               return sendJson(res, 200, { ok: true, note: result.skipped ? result.reason : result.timing })
             }
             const state = store.loadState(dataDir)
-            if (!state.scheduleTaskId) return sendJson(res, 400, { ok: false, error: '还没有巡检任务，先同步一次' })
+            if (!state.scheduleTaskId) return sendJson(res, 400, { ok: false, error: t('err.noTaskYet') })
             const result = await schedule.run({ id: state.scheduleTaskId })
-            if (result && result.code === 'schedule_execution_pending') return sendJson(res, 400, { ok: false, error: '上一次巡检还没跑完' })
+            if (result && result.code === 'schedule_execution_pending') return sendJson(res, 400, { ok: false, error: t('err.runPending') })
             return sendJson(res, 200, { ok: true })
           }
-          return sendJson(res, 400, { ok: false, error: `未知操作：${type}` })
+          return sendJson(res, 400, { ok: false, error: t('err.unknownAction', { type }) })
         } catch (error) {
           return sendJson(res, 400, { ok: false, error: String(error?.message ?? error) })
         }
@@ -455,9 +479,7 @@ export function apply(ctx, config) {
           systemPrompt.section({
             name: 'tool:watchlist',
             order: 900,
-            text:
-              '关注清单（watchlist_*）：用户想长期跟进某个话题时，先复述并确认主题措辞，再调用 watchlist_add，' +
-              '并在 note 里写清"什么算有进展"；每条可用 everyDays 指定自己的检查间隔（watchlist_update 可改）；查看清单用 watchlist_list，删除用 watchlist_remove。',
+            text: t('hint.watchlist'),
           }),
         )
       }
@@ -472,25 +494,25 @@ export function apply(ctx, config) {
   tool({
     name: 'watchlist_add',
     description:
-      '把主题加入关注清单，之后每次巡检都会追踪它。写入前先向用户复述并确认主题措辞，并尽量补一条 note 说明"什么算有进展"。' +
-      '主题写得具体一点（"某个模型的新版本发布" 好过 "AI"）。重复添加同一主题不会新增。可用 topics 一次加多个。',
+      'Add a topic to the watchlist; every check tracks it from then on. Restate the wording and confirm it with the user before writing, and add a note saying what counts as progress. ' +
+      'Make the topic specific ("a new release of model X" beats "AI"). Adding the same topic twice does not duplicate it; use topics to add several at once.',
     parameters: {
-      topic: { type: 'string', description: '要长期追踪的主题（单个）；与 topics 二选一' },
-      topics: { type: 'array', items: { type: 'string' }, description: '一次加多个主题；与 topic 二选一' },
-      keywords: { type: 'array', items: { type: 'string' }, description: '补充搜索关键词，可留空' },
-      note: { type: 'string', description: '给自己和巡检用的备注：为什么关注、什么叫有进展' },
-      everyDays: { type: 'number', description: '这条自己的检查间隔（天）。留空则跟随全局调度频率' },
+      topic: { type: 'string', description: 'One topic to follow; use either topic or topics' },
+      topics: { type: 'array', items: { type: 'string' }, description: 'Several topics at once; use either topic or topics' },
+      keywords: { type: 'array', items: { type: 'string' }, description: 'Extra search keywords; optional' },
+      note: { type: 'string', description: 'Note for you and the check: why you care, what counts as progress' },
+      everyDays: { type: 'number', description: "This topic's own interval in days; leave empty to follow the global schedule" },
     },
     output: { schema: { type: 'json' }, render: (_args, value) => text(value) },
     async execute(args) {
       const single = String(args.topic ?? '').trim()
       const batch = Array.isArray(args.topics) ? args.topics.map((item) => String(item).trim()).filter(Boolean) : []
       const names = single ? [single, ...batch.filter((name) => name !== single)] : batch
-      if (!names.length) return { message: '需要 topic 或 topics：告诉我至少一个主题', ok: false }
+      if (!names.length) return { message: t('add.needNames'), ok: false }
       const added = []
       const existed = []
       for (const name of names) {
-        const result = store.addTopic(dataDir, { topic: name, keywords: args.keywords, note: args.note, everyDays: args.everyDays })
+        const result = store.addTopic(dataDir, { topic: name, keywords: args.keywords, note: args.note, everyDays: args.everyDays, lang: hostLang() })
         if (result.created) added.push(result.topic.topic)
         else existed.push(result.topic.topic)
       }
@@ -501,10 +523,10 @@ export function apply(ctx, config) {
       }
       const total = store.loadTopics(dataDir).length
       const lines = []
-      if (added.length) lines.push(`已加入：${added.map((name) => `「${name}」`).join('、')}`)
-      if (existed.length) lines.push(`已在清单里：${existed.map((name) => `「${name}」`).join('、')}`)
+      if (added.length) lines.push(t('add.added', { list: qList(added) }))
+      if (existed.length) lines.push(t('add.existed', { list: qList(existed) }))
       return {
-        message: `${lines.join('；')}（共 ${total} 个主题）`,
+        message: t('add.done', { lines: lines.join(t('text.sep')), total }),
         ok: true,
         added,
         existed,
@@ -515,16 +537,16 @@ export function apply(ctx, config) {
 
   tool({
     name: 'watchlist_remove',
-    description: '从关注清单移除一个主题。target 可以是 id，也可以是主题名；只有唯一匹配时才会按名字删除。',
+    description: 'Remove one topic from the watchlist. target may be an id or a topic name; a name is only accepted when exactly one topic matches.',
     parameters: {
-      target: { type: 'string', required: true, description: '主题 id 或主题名' },
+      target: { type: 'string', required: true, description: 'Topic id or topic name' },
     },
     output: { schema: { type: 'json' }, render: (_args, value) => text(value) },
     async execute(args) {
-      const result = store.removeTopic(dataDir, args.target)
-      if (!result.removed) return { message: `清单里没有匹配「${args.target}」的主题`, remaining: result.remaining }
+      const result = store.removeTopic(dataDir, args.target, hostLang())
+      if (!result.removed) return { message: t('remove.missing', { target: args.target }), remaining: result.remaining }
       return {
-        message: `已移除「${result.removed.topic}」，剩 ${result.remaining} 个主题`,
+        message: t('remove.done', { topic: result.removed.topic, remaining: result.remaining }),
         remaining: result.remaining,
       }
     },
@@ -533,13 +555,13 @@ export function apply(ctx, config) {
   tool({
     name: 'watchlist_update',
     description:
-      '修改一条关注主题：单独设置它的检查间隔（everyDays，0 表示跟随全局默认）、备注或关键词。' +
-      '不传的字段保持不变。target 可用 id 或唯一主题名。',
+      'Change one topic: its own interval (everyDays, 0 = follow the global default), its note, or its keywords. ' +
+      'Fields you leave out keep their value. target may be an id or a unique topic name.',
     parameters: {
-      target: { type: 'string', required: true, description: '主题 id 或主题名' },
-      everyDays: { type: 'number', description: '这条自己的检查间隔（天）；0 = 跟随全局默认' },
-      note: { type: 'string', description: '关注点/备注' },
-      keywords: { type: 'array', items: { type: 'string' }, description: '搜索关键词' },
+      target: { type: 'string', required: true, description: 'Topic id or topic name' },
+      everyDays: { type: 'number', description: "This topic's own interval in days; 0 = follow the global default" },
+      note: { type: 'string', description: 'What to watch for, or a reminder' },
+      keywords: { type: 'array', items: { type: 'string' }, description: 'Search keywords' },
     },
     output: { schema: { type: 'json' }, render: (_args, value) => text(value) },
     async execute(args) {
@@ -547,16 +569,16 @@ export function apply(ctx, config) {
       if (args.everyDays !== undefined) patch.everyDays = Number(args.everyDays) > 0 ? Number(args.everyDays) : null
       if (args.note !== undefined) patch.note = args.note
       if (args.keywords !== undefined) patch.keywords = args.keywords
-      const updated = store.updateTopic(dataDir, args.target, patch)
-      if (!updated) return { message: `清单里没有「${args.target}」`, ok: false }
-      const every = updated.everyDays ? `每 ${updated.everyDays} 天` : '跟随全局默认'
-      return { message: `已更新「${updated.topic}」：间隔 ${every}`, ok: true, topic: updated }
+      const updated = store.updateTopic(dataDir, args.target, patch, hostLang())
+      if (!updated) return { message: t('update.missing', { target: args.target }), ok: false }
+      const every = updated.everyDays ? t('update.every', { days: updated.everyDays }) : t('update.followDefault')
+      return { message: t('update.done', { topic: updated.topic, every }), ok: true, topic: updated }
     },
   })
 
   tool({
     name: 'watchlist_list',
-    description: '查看关注清单、当前设置、调度状态和日报目录。回答"我现在追什么/怎么配的"时用它。',
+    description: 'Show the watchlist, the current settings, the schedule status, and where the reports live. Use it when the user asks what is being followed or how it is configured.',
     parameters: {},
     output: { schema: { type: 'json' }, render: (_args, value) => text(value) },
     async execute() {
@@ -570,15 +592,20 @@ export function apply(ctx, config) {
         task = view && view.id ? { id: view.id, status: view.status, timing: describeTiming(buildTiming(settings)) } : null
       }
       const lines = topics.length
-        ? topics.map((t, i) => `${i + 1}. ${t.topic}（${t.id}）${t.lastRunAt ? `｜上次巡检 ${t.lastRunAt.slice(0, 10)}` : '｜尚未巡检'}`)
-        : ['（空清单，用 watchlist_add 添加主题）']
+        ? topics.map((entry, index) => {
+            const last = entry.lastRunAt ? t('list.lastChecked', { date: entry.lastRunAt.slice(0, 10) }) : t('list.neverChecked')
+            return t('list.item', { index: index + 1, topic: entry.topic, id: entry.id }) + last
+          })
+        : [t('list.empty')]
       return {
         message: [
-          `关注清单：${topics.length} 个主题`,
+          t('list.header', { count: topics.length }),
           ...lines,
-          `调度：${settings.schedule.enabled ? describeTiming(buildTiming(settings)) : '未开启'}${task ? `｜任务 ${task.status}` : ''}`,
-          `推送：${settings.push.channels.join('、') || '无'}`,
-          `窗口：上次巡检到现在（首次默认 ${settings.lookbackDays} 天）｜数据目录：${dataDir}`,
+          t('list.schedule', {
+            timing: settings.schedule.enabled ? describeTiming(buildTiming(settings)) : t('list.scheduleOff'),
+          }) + (task ? t('list.taskSuffix', { status: task.status }) : ''),
+          t('list.push', { channels: settings.push.channels.join(t('list.sep')) || t('list.none') }),
+          t('list.window', { days: settings.lookbackDays, dir: dataDir }),
         ].join('\n'),
         dataDir,
         topics: topics.map((t) => ({ id: t.id, topic: t.topic, keywords: t.keywords, lastRunAt: t.lastRunAt })),
@@ -591,24 +618,24 @@ export function apply(ctx, config) {
   tool({
     name: 'watchlist_run_brief',
     description:
-      '巡检开始时调用：开一次巡检，返回本轮**到期**的主题、每个主题各自的检索窗口、推送方式和落盘位置。' +
-      '这是"该搜什么、搜哪段时间"的唯一权威来源，不要自己猜；不在返回里的主题本轮不要搜。',
+      'Call this when a check starts: it opens one run and returns the topics due this round, each topic’s own search window, the push channels, and where the digest is written. ' +
+      'It is the only authority for what to search and for which period; never guess, and do not search a topic that is absent from the answer.',
     parameters: {},
     output: { schema: { type: 'json' }, render: (_args, value) => text(value) },
     async execute() {
       const settings = settingsOf()
       const now = Date.now()
       if (store.loadTopics(dataDir).length === 0) {
-        return { message: '关注清单是空的：本次不巡检。先用 watchlist_add 添加主题。', skip: true, reason: 'empty', dataDir }
+        return { message: t('brief.empty'), skip: true, reason: 'empty', dataDir }
       }
       const current = store.currentRun(dataDir)
       if (current && now - new Date(current.startedAt).getTime() < 30 * 60 * 1000) {
-        return { message: '刚刚已经开过一次巡检（30 分钟内），本轮跳过，避免重复劳动。', skip: true, runId: current.id, dataDir }
+        return { message: t('brief.recent'), skip: true, runId: current.id, dataDir }
       }
       const days = defaultEveryDays(settings)
       const due = store.dueTopics(dataDir, days)
       if (due.length === 0) {
-        return { message: '本轮没有到期的主题：所有条目都还没到各自的下次检查时间。', skip: true, reason: 'none-due', dataDir }
+        return { message: t('brief.noneDue'), skip: true, reason: 'none-due', dataDir }
       }
       store.closeCurrentRun(dataDir)
       const limited = due.slice(0, settings.maxTopicsPerRun)
@@ -620,20 +647,29 @@ export function apply(ctx, config) {
       const runFrom = windows.reduce((min, item) => (item.from < min ? item.from : min), windows[0].from)
       const run = store.startRun(dataDir, { from: runFrom, to: new Date(now).toISOString(), day: store.dayStamp(settings.timeZone) })
       const reportPath = store.reportPathOf(dataDir, run)
-      const lines = windows.map(
-        (item, index) =>
-          `${index + 1}. ${item.topic.topic}（id: ${item.topic.id}）｜窗口 ${store.formatStamp(item.from)} → 现在` +
-          `${item.topic.everyDays ? `｜每 ${item.topic.everyDays} 天` : ''}` +
-          `${item.topic.keywords.length ? `｜关键词：${item.topic.keywords.join(' / ')}` : ''}` +
-          `${item.topic.note ? `｜关注点：${String(item.topic.note).replace(/^关注点[:：]\s*/, '')}` : ''}`,
-      )
+      const lines = windows.map((item, index) => {
+        let line = t('brief.item', {
+          index: index + 1,
+          topic: item.topic.topic,
+          id: item.topic.id,
+          from: store.formatStamp(item.from),
+        })
+        if (item.topic.everyDays) line += t('brief.every', { days: item.topic.everyDays })
+        if (item.topic.keywords.length) line += t('brief.keywords', { list: item.topic.keywords.join(' / ') })
+        if (item.topic.note) line += t('brief.note', { note: String(item.topic.note).replace(/^(关注点|Focus)[:：]\s*/i, '') })
+        return line
+      })
       return {
         message: [
-          `本次巡检 ${store.formatStamp(run.startedAt)}，到期 ${limited.length}/${store.loadTopics(dataDir).length} 个主题，推送 ${settings.push.channels.join('、') || '无'}`,
+          t('brief.header', {
+            stamp: store.formatStamp(run.startedAt),
+            due: limited.length,
+            total: store.loadTopics(dataDir).length,
+            channels: settings.push.channels.join(t('list.sep')) || t('list.none'),
+          }),
           ...lines,
-          due.length > limited.length ? `（还有 ${due.length - limited.length} 个到期主题本轮跳过，下次轮到）` : null,
-          `落盘：每个主题调用一次 watchlist_record；报告写到当日文件 ${reportPath}` +
-            `${run.seq > 1 ? `（本日第 ${run.seq} 次巡检，追加到同一文件的新小节）` : ''}`,
+          due.length > limited.length ? t('brief.more', { count: due.length - limited.length }) : null,
+          t('brief.path', { path: reportPath }) + (run.seq > 1 ? t('brief.pathSeq', { seq: run.seq }) : ''),
         ]
           .filter(Boolean)
           .join('\n'),
@@ -661,19 +697,19 @@ export function apply(ctx, config) {
   tool({
     name: 'watchlist_record',
     description:
-      '记录一个主题本次的巡检结果：追加到当日报告文件（每天最多一份；同一天的多次巡检各占一个小节）。每个主题每次巡检调用一次；' +
-      'hasUpdate 为真表示有实质新进展。importance 写 high 表示"用户应当立刻知道"：' +
-      '只有会改变判断、需要用户行动或属于重大突破时才用，常规更新不写。sources 每行一个来源，写成「标题 - 链接」。',
+      'Record one topic’s result for this check: appended to today’s report file (one file per day; several runs on the same day each take their own section). Call it once per topic per check. ' +
+      'hasUpdate marks real progress. importance: high means the user should know immediately — only when it changes the picture, needs an action, or is a breakthrough; leave it out for ordinary updates. ' +
+      'One source per line in sources, written as “title - link”.',
     parameters: {
-      topic: { type: 'string', required: true, description: '主题 id 或主题名，来自 watchlist_run_brief' },
-      summary: { type: 'string', required: true, description: '一句话结论：有了什么新进展，或为什么没有' },
-      hasUpdate: { type: 'boolean', description: '是否有实质新进展，默认 false' },
+      topic: { type: 'string', required: true, description: 'Topic id or name, from watchlist_run_brief' },
+      summary: { type: 'string', required: true, description: 'One-sentence verdict: what progressed, or why nothing did' },
+      hasUpdate: { type: 'boolean', description: 'Whether there is real progress; default false' },
       importance: {
         type: 'string',
-        description: 'high = 需要用户立刻知道（改变判断/需要行动/重大突破）；normal 或留空 = 常规更新',
+        description: 'high = the user should know immediately (changes the picture / needs an action / breakthrough); normal or empty = ordinary update',
       },
-      sources: { type: 'array', items: { type: 'string' }, description: '来源，每项「标题 - 链接」' },
-      note: { type: 'string', description: '补充说明，可选' },
+      sources: { type: 'array', items: { type: 'string' }, description: 'Sources, one “title - link” per item' },
+      note: { type: 'string', description: 'Extra context; optional' },
     },
     output: { schema: { type: 'json' }, render: (_args, value) => text(value) },
     async execute(args) {
@@ -684,7 +720,7 @@ export function apply(ctx, config) {
         topics.find((t) => t.id === raw) ||
         topics.find((t) => store.normalizeName(t.topic) === store.normalizeName(raw)) ||
         topics.find((t) => store.normalizeName(t.topic).includes(store.normalizeName(raw)))
-      if (!hit) return { message: `清单里没有「${raw}」，先 watchlist_add 再加记录`, recorded: false }
+      if (!hit) return { message: t('record.missing', { raw }), recorded: false }
       const importance = store.normalizeImportance(args.importance)
       const result = store.appendRunEntry(dataDir, {
         topic: hit.topic,
@@ -694,10 +730,17 @@ export function apply(ctx, config) {
         sources: args.sources ?? [],
         note: args.note,
         day: store.dayStamp(settings.timeZone),
+        lang: hostLang(),
       })
       store.touchTopics(dataDir, [hit.id])
       return {
-        message: `${importance === 'high' ? '【重要】' : ''}已记录「${hit.topic}」→ ${result.path}（本次第 ${result.runTotal} 条｜当日第 ${result.dayTotal} 条）`,
+        message: t('record.done', {
+          flag: importance === 'high' ? t('record.important') : '',
+          topic: hit.topic,
+          path: result.path,
+          runTotal: result.runTotal,
+          dayTotal: result.dayTotal,
+        }),
         recorded: true,
         path: result.path,
         runId: result.runId,
@@ -714,56 +757,53 @@ export function apply(ctx, config) {
   tool({
     name: 'watchlist_schedule',
     description:
-      '管理自动巡检任务：sync 按当前设置创建/更新任务，pause/resume 暂停或恢复，remove 删除，' +
-      'run_now 立即投递一次巡检到会话。任务也会出现在 DSH 的「自动化任务」页面。',
+      'Manage the automatic check: sync creates or updates the task from the current settings, pause/resume stop and restart it, remove deletes it, ' +
+      'run_now delivers one check to the conversation right away. The task also appears on the DSH Automation page.',
     parameters: {
       action: { type: 'string', required: true, description: 'sync | pause | resume | remove | run_now' },
     },
     output: { schema: { type: 'json' }, render: (_args, value) => text(value) },
     async execute(args) {
       const schedule = scheduleService()
-      if (!schedule) return { message: '当前 profile 没有挂载 dsh-schedule，无法自动巡检；可以手动让 Agent 执行巡检', ok: false }
+      if (!schedule) return { message: t('sched.noService'), ok: false }
       const state = store.loadState(dataDir)
       const action = String(args.action ?? '').trim()
       if (action === 'sync') {
         const result = await ensureTask(true)
-        if (result.skipped) return { message: `未创建任务：${result.reason}`, ok: false }
+        if (result.skipped) return { message: t('sched.skipped', { reason: result.reason }), ok: false }
         return {
-          message: `巡检任务已${result.created ? '创建' : '更新'}：${result.timing}（任务 id ${result.taskId}）`,
+          message: t(result.created ? 'sched.created' : 'sched.updated', { timing: result.timing, id: result.taskId }),
           ok: true,
           taskId: result.taskId,
           timing: result.timing,
         }
       }
-      if (!state.scheduleTaskId) {
-        if (action === 'run_now') return { message: '还没有巡检任务，先 watchlist_schedule sync', ok: false }
-        return { message: '还没有巡检任务，先 watchlist_schedule sync', ok: false }
-      }
+      if (!state.scheduleTaskId) return { message: t('sched.noTask'), ok: false }
       if (action === 'pause' || action === 'resume') {
         await schedule.edit({ id: state.scheduleTaskId, action: 'update', patch: { active: action === 'resume' } })
-        return { message: action === 'pause' ? '已暂停自动巡检' : '已恢复自动巡检', ok: true }
+        return { message: t(action === 'pause' ? 'sched.paused' : 'sched.resumed'), ok: true }
       }
       if (action === 'remove') {
         await schedule.edit({ id: state.scheduleTaskId, action: 'delete' })
         store.saveState(dataDir, { scheduleTaskId: null })
-        return { message: '已删除自动巡检任务', ok: true }
+        return { message: t('sched.removed'), ok: true }
       }
       if (action === 'run_now') {
         const result = await schedule.run({ id: state.scheduleTaskId })
-        if (result && result.code === 'schedule_execution_pending') return { message: '上一次巡检还没跑完，稍后再试', ok: false }
-        return { message: '已投递一次巡检，目标会话马上开始执行', ok: true }
+        if (result && result.code === 'schedule_execution_pending') return { message: t('sched.pending'), ok: false }
+        return { message: t('sched.delivered'), ok: true }
       }
-      return { message: `未知操作「${action}」，可用：sync / pause / resume / remove / run_now`, ok: false }
+      return { message: t('sched.unknown', { action }), ok: false }
     },
   })
 
   tool({
     name: 'watchlist_settings',
     description:
-      '查看或修改巡检设置。patch 里只写要改的字段，例如 {"schedule":{"time":"09:00"},"push":{"channels":["session","macos"]}}。' +
-      '改到 schedule 字段会自动同步任务；也可用 watchlist_schedule sync 强制重建。',
+      'Read or change the check settings. Put only the fields to change in patch, for example {"schedule":{"time":"09:00"},"push":{"channels":["session","macos"]}}. ' +
+      'Changing a schedule field syncs the task; watchlist_schedule sync rebuilds it as well.',
     parameters: {
-      patch: { type: 'string', description: 'JSON 字符串形式的局部设置，例如 {"lookbackDays":3}；留空则只查看' },
+      patch: { type: 'string', description: 'Partial settings as a JSON string, for example {"lookbackDays":3}; leave empty to only read' },
     },
     output: { schema: { type: 'json' }, render: (_args, value) => text(value) },
     async execute(args) {
@@ -772,9 +812,9 @@ export function apply(ctx, config) {
         try {
           patch = JSON.parse(String(args.patch))
         } catch {
-          return { message: 'patch 不是合法 JSON，例如：{"lookbackDays":3}', ok: false }
+          return { message: t('set.badJson'), ok: false }
         }
-        if (!patch || typeof patch !== 'object' || Array.isArray(patch)) return { message: 'patch 必须是 JSON 对象', ok: false }
+        if (!patch || typeof patch !== 'object' || Array.isArray(patch)) return { message: t('set.notObject'), ok: false }
         patch = withScheduleIntent(patch)
         store.saveSettings(dataDir, patch)
       }
@@ -784,18 +824,21 @@ export function apply(ctx, config) {
       if (touchesSchedule) {
         try {
           const sync = await ensureTask(true)
-          syncNote = sync.skipped ? `（任务未同步：${sync.reason}）` : `（任务已同步：${sync.timing}）`
+          syncNote = sync.skipped ? t('set.noteSkipped', { reason: sync.reason }) : t('set.noteSynced', { timing: sync.timing })
         } catch (error) {
-          syncNote = `（任务同步失败：${error?.message ?? error}）`
+          syncNote = t('set.noteFailed', { message: error?.message ?? error })
         }
       }
       const summary = [
-        `回溯天数：${settings.lookbackDays}｜时区：${settings.timeZone}｜单轮上限：${settings.maxTopicsPerRun}`,
-        `调度：${settings.schedule.enabled ? describeTiming(buildTiming(settings)) : '未开启'}｜频率：${settings.schedule.frequency}`,
-        `推送：${settings.push.channels.join('、') || '无'}`,
-        `数据目录：${dataDir}`,
+        t('set.lookback', { days: settings.lookbackDays, zone: settings.timeZone, max: settings.maxTopicsPerRun }),
+        t('set.schedule', {
+          timing: settings.schedule.enabled ? describeTiming(buildTiming(settings)) : t('list.scheduleOff'),
+          frequency: settings.schedule.frequency,
+        }),
+        t('set.push', { channels: settings.push.channels.join(t('list.sep')) || t('list.none') }),
+        t('set.data', { dir: dataDir }),
       ].join('\n')
-      return { message: patch ? `设置已更新${syncNote}\n${summary}` : summary, ok: true, settings }
+      return { message: patch ? t('set.saved', { note: syncNote }) + `\n${summary}` : summary, ok: true, settings }
     },
   })
 }

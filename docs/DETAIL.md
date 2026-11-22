@@ -21,15 +21,15 @@ progress, write it down, and push a summary.
 
 ## Where it shows up
 
-- A `关注清单` row in the left sidebar's panel list, beside Plugins and Automation.
+- A `Watchlist` row in the left sidebar's panel list, beside Plugins and Automation.
   Selecting it opens the plugin's own page in the centre column: the topic list,
   a read-only status line (auto-run, next run, push channels), and the report
   history.
   The row carries a count badge for unread entries that reported real progress; the
   count turns amber while one of those entries is `importance: high`. Read state is per
   report: opening today's report clears today's entries only, yesterday's report keeps
-  its `未读` tag, and every report carries a read/unread toggle. `全部已读` and
-  `全部未读` on the page or in Settings flip them all at once.
+  its `unread` tag, and every report carries a read/unread toggle. `Mark all read` and
+  `Mark all unread` on the page or in Settings flip them all at once.
 - A band directly under the page header (outside the scroll box) lists what deserves
   attention before any scrolling: unread `high` entries, plus every starred entry. Each
   row opens the report it belongs to; each row also carries the star toggle.
