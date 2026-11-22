@@ -408,8 +408,8 @@ window.__ModuleLoader__.load({
             const result = await act(type, payload)
             if (result && result.ok === false) setError(result.error || COPY.saveFailed)
             applyCounts(result)
-            await load()
-            // `全部已读` and friends change state other mounts are showing; let them refetch.
+            // The revision wakes every surface, including this one; a second fetch here
+            // would double the render for one click.
             bumpData()
             return result
           } catch (cause) {
@@ -421,7 +421,22 @@ window.__ModuleLoader__.load({
         },
         [load],
       )
-      return { state, error, busy, reload: load, run }
+      /** Read/unread toggles are cheap and idempotent: no busy state, no disabled controls. */
+      const markRead = useCallback(
+        async (kind, runId) => {
+          try {
+            const result = await act(kind, runId ? { runId } : undefined)
+            applyCounts(result)
+            bumpData()
+            return result
+          } catch (cause) {
+            setError(String((cause && cause.message) || cause))
+            return null
+          }
+        },
+        [],
+      )
+      return { state, error, busy, reload: load, run, markRead }
     }
 
     const STYLE = `
@@ -935,7 +950,7 @@ window.__ModuleLoader__.load({
     }
 
     /** Reports grouped by day file; one entry per topic, clicking opens the reader. */
-    function HistorySection({ state, run }) {
+    function HistorySection({ state, markRead }) {
       const groups = groupRunsByFile((state && state.runs) || [])
       const unread = new Set((state && state.unreadRunIds) || [])
       if (!groups.length) return h('div', { className: 'dwlp-empty' }, COPY.noDigest)
@@ -968,10 +983,7 @@ window.__ModuleLoader__.load({
                   'button',
                   {
                     className: 'dwlp-runbtn',
-                    onClick: () =>
-                      unread.has(runRecord.id)
-                        ? run('seen', { runId: runRecord.id })
-                        : run('unseen', { runId: runRecord.id }),
+                    onClick: () => markRead(unread.has(runRecord.id) ? 'seen' : 'unseen', runRecord.id),
                   },
                   unread.has(runRecord.id) ? COPY.markRead : COPY.markUnread,
                 ),
@@ -998,7 +1010,7 @@ window.__ModuleLoader__.load({
     /** Settings → Watchlist: the same controls in a plain scrolling section. */
     function WatchlistPage() {
       useLang()
-      const { state, error, busy, run, reload } = useWatchlist()
+      const { state, error, busy, run, reload, markRead } = useWatchlist()
       const { dataRev } = useUiState()
       useEffect(() => {
         reload()
@@ -1025,8 +1037,8 @@ window.__ModuleLoader__.load({
           'div',
           { className: 'dwl-field' },
           h('span', { className: 'dwl-meta' }, `${(state && state.unreadUpdates) || 0} ${COPY.newUpdates}`),
-          h('button', { className: 'dwl-btn', disabled: busy, onClick: () => run('seen') }, COPY.markAllRead),
-          h('button', { className: 'dwl-btn', disabled: busy, onClick: () => run('unseen') }, COPY.markAllUnread),
+          h('button', { className: 'dwl-btn', onClick: () => markRead('seen') }, COPY.markAllRead),
+          h('button', { className: 'dwl-btn', onClick: () => markRead('unseen') }, COPY.markAllUnread),
         ),
 
         h('h3', null, COPY.topics),
@@ -1059,7 +1071,7 @@ window.__ModuleLoader__.load({
     /** The sidebar panel: the whole watchlist in one page, selected from the nav list. */
     function WatchlistPanel() {
       useLang()
-      const { state, error, busy, run, reload } = useWatchlist()
+      const { state, error, busy, run, reload, markRead } = useWatchlist()
       const { dataRev } = useUiState()
       useEffect(() => {
         reload()
@@ -1089,8 +1101,8 @@ window.__ModuleLoader__.load({
             'div',
             { className: 'dwlp-head-actions' },
             unread ? h('span', { className: 'dwlp-chip' }, `${unread} ${COPY.newUpdates}`) : null,
-            unread ? h('button', { className: 'dwl-btn', disabled: busy, onClick: () => run('seen') }, COPY.markAllRead) : null,
-            h('button', { className: 'dwl-btn', disabled: busy, onClick: () => run('unseen') }, COPY.markAllUnread),
+            unread ? h('button', { className: 'dwl-btn', onClick: () => markRead('seen') }, COPY.markAllRead) : null,
+            h('button', { className: 'dwl-btn', onClick: () => markRead('unseen') }, COPY.markAllUnread),
             h('button', { className: 'dwl-btn dwlp-primary', disabled: busy, onClick: () => run('run') }, COPY.runNow),
           ),
         ),
@@ -1134,7 +1146,7 @@ window.__ModuleLoader__.load({
                       h('h2', null, COPY.digests),
                       h('span', { className: 'dwl-meta' }, COPY.entryHint),
                     ),
-                    h(HistorySection, { state, run }),
+                    h(HistorySection, { state, markRead }),
                   ),
                 ],
           ),

@@ -289,7 +289,9 @@ change, wait for a poll or reopen the surface before judging it.
   per-report toggle — `标为已读` on an unread report, `标为未读` on a read one. Toggling
   one moves the badge by that report's entries only, the way a mail row does.
 - Opening a report marks that report read; `全部已读` and `全部未读` on the page and in
-  Settings flip every report at once.
+  Settings flip every report at once. Toggling read state must not flash the page:
+  it is a quiet call, so the interval selects and the header keep still (only the
+  counts move).
 - Schedule, push and language controls appear only in Settings → Watchlist; if
   they show up here as well, this case fails (duplication was removed on purpose).
 - The page scrolls inside the centre column; the header stays put and nothing
