@@ -6,7 +6,7 @@
 
 Design agreed on 2026-11-22. Recorded here so the later implementation has a fixed target.
 
-**Implementation** — the Host's `osascript` path was removed: macOS attributes those notifications to Script Editor, so a click opened the wrong app. The client half now posts through the renderer's `Notification` API (attributed to DeepSeek Harness), remembers the last notified run in `localStorage`, waits for a quiet period so the run is listed whole, and routes a click to the run's report in the right sidebar tab, falling back to the in-app reader. The settings page has a "send a test notification" button to verify the system permission.
+**Implementation** — the Host's `osascript` path was removed: macOS attributes those notifications to Script Editor, so a click opened the wrong app. The client half now posts through the renderer's `Notification` API (attributed to DeepSeek Harness), remembers the last notified run in `localStorage`, waits for a quiet period so the run is listed whole, and routes a click to the run's report (the right sidebar tab at the time; since `6c6bafc` it opens the reader directly). The settings page has a "send a test notification" button to verify the system permission.
 
 **Trigger** — only when the run contains at least one entry with `hasUpdate = true`. A run with no progress stays silent unless `heartbeat` is enabled.
 
@@ -53,6 +53,31 @@ Settings → Watchlist, so the page is not a second copy of the settings form.
 Still open: the final visual design of the row, the page, and the report Markdown
 renderer.
 
+### 3. Read a digest beside the conversation — idea only, not scheduled (2026-11-23)
+
+While talking to the agent about a topic, it would be nice to keep the day's report open
+in the right column instead of covering the chat with the modal reader.
+
+**Why this is not the old right-sidebar tab.** That tab was removed in `6c6bafc` because it
+could not work from where users read reports. DSH's right column is session-scoped: its
+commands act on the session on screen, and a session is on screen only while the
+Conversation fills the middle column. The watchlist page takes that column, so any button
+on the page has no session to open a tab into. Restoring the tab without a
+conversation-side entry point would just bring back a button that fails.
+
+**What it would take.** An entry point that lives inside a conversation and is rendered
+while the conversation is still on screen — for example a card on the result of
+`watchlist_run_brief` / `watchlist_record`, offering "open today's report on the right" —
+which then registers/opens a tab through the sidebar-right service. The reader stays for
+every other path (page history, notification click).
+
+**Open questions.** Card on the tool result versus a link in the agent's prose; which slot
+owns that card and whether it is per-tool or generic; whether the right column exists at
+narrow widths; whether the tab follows the day file or the run that opened it.
+
+**State.** Deferred on purpose. Revisit after the UI polish item (2) and the page's visual
+design have settled, and decide then whether the scenario is worth the extra contract.
+
 ---
 
 ## 已知待办
@@ -62,6 +87,7 @@ renderer.
 用户 2026-11-22 提出的设计，先把结论记在这里，后续实现。
 
 **实现说明**：Host 的 `osascript` 路线已移除——系统把这类通知归到 Script Editor 名下，点击会打开错误的 App。改由客户端半用渲染进程的 `Notification` API 发送（归属 DeepSeek Harness），用 `localStorage` 记住上次已通知的 run，等本轮写入静默后再发，保证一次巡检只发一条且主题列全；点击优先打开右侧栏该次报告，失败回退到应用内阅读器。设置页新增「发一条测试通知」按钮，用于验证系统权限。
+（**2026-11-23 变更**：右侧栏标签页已移除（`6c6bafc`），点击改为直接打开应用内阅读器。）
 
 **触发**：仅当本轮巡检存在 `hasUpdate = true` 的条目时才推送；无实质进展不打扰（可另配 `heartbeat` 例外）。
 
@@ -93,11 +119,28 @@ renderer.
    `**加粗**` 和裸 URL。段落是 3px 上下边距的普通 div，因此没有代码块、引用、表格、
    分隔线、嵌套列表，也没有第三级标题，更没有阅读栏宽。应用内阅读器正文
    （`.dwl-reader-body`）用同一个组件。本节原先还提到右侧栏报告标签页，它已随整页改造
-   一起移除，现在阅读器是唯一的报告界面，
-   所以改法要同时照顾这两种宽度下的观感。
+   一起移除，现在阅读器是唯一的报告界面。
 
 **进展（2026-11-22）**——结构部分已在 `ui/sidebar-panel` 分支完成：左下角入口已移除，
 改为 `sidebar.panellist` 的一行，与「插件」「自动化任务」并列；并注册了一个 keyed
 `main` 页面，在中间列整页显示清单内容（主题、一列只读状态、报告历史）。调度/推送/语言
 留在 设置 → 关注清单，页面不再重复一遍设置表单。仍未完成：该行、整页和报告 Markdown
 渲染器的最终视觉设计。
+
+### 3. 边聊边看日报——只是记下来，暂不排期（2026-11-23）
+
+和 Agent 聊某个话题时，如果能把当天的报告摊在右侧、而不是用浮层遮住对话，体验会更好。
+
+**这不等于是恢复旧的右侧栏标签页。** 那个标签页已在 `6c6bafc` 移除，因为它在用户读报告的地方根本跑不通。
+DSH 的右侧栏是会话作用域的：命令只作用在"屏幕上的会话"，而会话只在对话占据中间列时存在。
+关注清单整页占掉了中间列，所以页面上的任何按钮都没有会话可开。只把标签页加回来、不加会话内的入口，
+等于把一个会失败的按钮又装回去。
+
+**要做需要什么。** 一个**位于会话内**、且渲染时对话仍在中间列的入口——例如在
+`watchlist_run_brief` / `watchlist_record` 的结果上挂一张卡片，提供"在右侧打开今天的报告"，
+再由它通过 sidebar-right 服务注册/打开标签页。其他路径（页面历史、通知点击）继续用阅读器。
+
+**待定的问题。** 卡片挂在工具结果上还是写进 Agent 正文的链接；那张卡片归哪个槽、按工具还是通用；
+窄宽度下右侧栏是否还存在；标签页跟随"当天文件"还是"打开它的那次巡检"。
+
+**状态**：刻意搁置。等第 2 项界面美化、整页的视觉设计定下来之后再回来看，那时候再判断这个场景值不值得多绑一套契约。
