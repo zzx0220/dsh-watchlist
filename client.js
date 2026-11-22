@@ -416,77 +416,6 @@ window.__ModuleLoader__.load({
       return h('div', null, blocks)
     }
 
-    function Digests({ state }) {
-      const [viewDay, setViewDay] = useState(null)
-      const [texts, setTexts] = useState({})
-      const [pending, setPending] = useState(false)
-      const [notice, setNotice] = useState('')
-
-      const toggle = async (day) => {
-        if (viewDay === day) {
-          setViewDay(null)
-          return
-        }
-        setViewDay(day)
-        if (texts[day] !== undefined) return
-        setPending(true)
-        const result = await act('read', { day })
-        setPending(false)
-        setTexts((current) => ({
-          ...current,
-          [day]: result && result.ok ? result.text : String((result && result.error) || COPY.failed),
-        }))
-      }
-
-      if (!state.digests || state.digests.length === 0) return h('div', { className: 'dwl-empty' }, COPY.noDigest)
-      return h(
-        'div',
-        null,
-        state.digests.map((group) =>
-          h(
-            'div',
-            { className: 'dwl-day', key: group.day },
-            h(
-              'button',
-              { className: 'dwl-daybtn', onClick: () => toggle(group.day) },
-              h('span', null, group.day),
-              h('span', { className: 'dwl-meta' }, `${group.entries.length} ${zh() ? '条' : 'items'}`),
-              h('span', { className: 'dwl-meta' }, viewDay === group.day ? '▾' : '▸'),
-            ),
-            viewDay === group.day
-              ? h(
-                  'div',
-                  { style: { padding: '6px 0 10px' } },
-                  h(
-                    'div',
-                    { style: { display: 'flex', justifyContent: 'flex-end', gap: 8, marginBottom: 6 } },
-                    h(
-                      'button',
-                      {
-                        className: 'dwl-btn',
-                        onClick: () => {
-                          const fallback =
-                            state.openSessionId ||
-                            (state.schedule && state.schedule.task && state.schedule.task.sessionId)
-                          const result = openDigestTab(group.day)
-                          setNotice(result === 'ok' ? '' : `${zh() ? '打开失败' : 'Failed'}：${result}`)
-                        },
-                      },
-                      COPY.openSidebar,
-                    ),
-                    h('button', { className: 'dwl-btn', onClick: () => act('open', { day: group.day }) }, COPY.openFile),
-                  ),
-                  notice ? h('div', { className: 'dwl-meta', style: { marginBottom: 6 } }, notice) : null,
-                  pending && texts[group.day] === undefined
-                    ? h('div', { className: 'dwl-meta' }, COPY.loading)
-                    : h(Markdown, { text: texts[group.day] || '' }),
-                )
-              : null,
-          ),
-        ),
-      )
-    }
-
     function WatchlistPage() {
       useLang()
       const { state, error, busy, run } = useWatchlist()
@@ -650,8 +579,6 @@ window.__ModuleLoader__.load({
           ),
         ),
 
-        h('h3', null, COPY.digests),
-        h(Digests, { state }),
       )
     }
 
