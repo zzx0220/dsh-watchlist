@@ -391,7 +391,7 @@ window.__ModuleLoader__.load({
       .dwl-grow { flex: 1; min-width: 0; }
       .dwl-btn { border: 1px solid var(--dsw-alias-border-l2, #ccc); background: var(--dsw-alias-bg-layer-2, #f5f5f5); color: inherit;
         border-radius: 6px; padding: 3px 10px; font-size: 12px; cursor: pointer; }
-      .dwl-btn:hover { background: var(--dsw-alias-bg-layer-1, #fff); }
+      .dwl-btn:hover { background: var(--dsw-alias-interactive-bg-hover, rgba(0,0,0,.06)); }
       .dwl-btn:disabled { opacity: .5; cursor: default; }
       .dwl-input { border: 1px solid var(--dsw-alias-border-l2, #ccc); background: var(--dsw-alias-bg-layer-1, #fff); color: inherit;
         border-radius: 6px; padding: 4px 8px; font-size: 12px; }
@@ -406,8 +406,6 @@ window.__ModuleLoader__.load({
       .dwl-day { margin: 4px 0; }
       .dwl-daybtn { background: none; border: 0; color: inherit; font: inherit; cursor: pointer; padding: 2px 0; display: flex; gap: 8px; }
       .dwl-src { color: var(--dsw-alias-label-secondary, #666); font-size: 12px; word-break: break-all; }
-      .dwl-badge { position: absolute; top: -3px; right: -6px; min-width: 16px; height: 16px; line-height: 16px; padding: 0 4px;
-        border-radius: 8px; background: var(--dsw-alias-brand-primary, #247bbf); color: #fff; font-size: 10px; font-weight: 600; }
       .dwl-footer-btn { position: relative; display: flex; align-items: center; gap: 6px; border: 0; background: none; color: inherit;
         cursor: pointer; padding: 5px 6px; border-radius: 6px; font: inherit; font-size: 12px; }
       .dwl-footer-btn:hover { background: var(--dsw-alias-bg-layer-2, rgba(0,0,0,.06)); }
@@ -442,10 +440,11 @@ window.__ModuleLoader__.load({
         color: var(--dsw-alias-label-secondary, #666); }
       .dwlp-head-actions { display: flex; align-items: center; gap: 10px; flex: none; padding-top: 2px; }
       .dwlp-chip { font-size: 11px; font-weight: 600; padding: 2px 9px; border-radius: 999px;
-        background: var(--dsw-alias-brand-primary, #247bbf); color: #fff; }
-      .dwlp-primary { border-color: transparent; background: var(--dsw-alias-brand-primary, #247bbf); color: #fff;
-        font-weight: 600; padding: 4px 12px; }
-      .dwlp-primary:hover { background: var(--dsw-alias-brand-primary, #247bbf); filter: brightness(1.08); }
+        background: var(--dsw-alias-button-info-fill, #2b6cf6); color: #fff; }
+      .dwlp-primary { border-color: transparent; font-weight: 600; padding: 4px 12px;
+        background: var(--dsw-alias-button-primary-fill, #1f1f1f);
+        color: var(--dsw-alias-label-primary-foreground, #fff); }
+      .dwlp-primary:hover { background: var(--dsw-alias-button-primary-hover, #3d3d3d); }
       .dwlp-scroll { flex: 1; min-height: 0; overflow: auto; }
       .dwlp-inner { max-width: 940px; margin: 0 auto; padding: 20px 32px 56px;
         display: flex; flex-direction: column; gap: 16px; }
@@ -457,7 +456,7 @@ window.__ModuleLoader__.load({
       .dwlp-status-dot[data-on='true'] { background: var(--dsw-alias-state-success-primary, #1a9c62); }
       .dwlp-status-hint { margin-left: auto; font-size: 11px;
         color: var(--dsw-alias-label-tertiary, #999); }
-      .dwlp-card { border: 1px solid var(--dsw-alias-border-l1, rgba(0,0,0,.09)); border-radius: 12px;
+      .dwlp-card { border: 1px solid var(--dsw-alias-border-l2, rgba(0,0,0,.1)); border-radius: 12px;
         background: var(--dsw-alias-bg-layer-2, rgba(0,0,0,.018)); padding: 15px 17px 16px; }
       .dwlp-cardhead { display: flex; align-items: baseline; justify-content: space-between; gap: 14px; margin-bottom: 11px; }
       .dwlp-cardhead h2 { margin: 0; font-size: 13px; font-weight: 600; }
@@ -467,7 +466,7 @@ window.__ModuleLoader__.load({
       .dwlp-add { display: flex; gap: 8px; margin-bottom: 12px; }
       .dwlp-topics { display: grid; grid-template-columns: repeat(auto-fill, minmax(232px, 1fr)); gap: 10px; }
       .dwlp-topic { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px;
-        border: 1px solid var(--dsw-alias-border-l1, rgba(0,0,0,.09)); border-radius: 10px;
+        border: 1px solid var(--dsw-alias-border-l2, rgba(0,0,0,.1)); border-radius: 10px;
         background: var(--dsw-alias-bg-layer-1, transparent); }
       .dwlp-topic-name { font-size: 13px; font-weight: 600; line-height: 1.45; word-break: break-word; }
       .dwlp-topic-foot { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 2px; }
@@ -478,7 +477,7 @@ window.__ModuleLoader__.load({
       .dwlp-icon-btn:hover { background: var(--dsw-alias-bg-layer-2, rgba(0,0,0,.06));
         color: var(--dsw-alias-state-error-primary, #c00); }
       .dwlp-history { display: flex; flex-direction: column; gap: 8px; }
-      .dwlp-day { border: 1px solid var(--dsw-alias-border-l1, rgba(0,0,0,.09)); border-radius: 10px; overflow: hidden; }
+      .dwlp-day { border: 1px solid var(--dsw-alias-border-l2, rgba(0,0,0,.1)); border-radius: 10px; overflow: hidden; }
       .dwlp-dayhead { display: flex; align-items: baseline; justify-content: space-between; gap: 10px;
         padding: 8px 12px; background: var(--dsw-alias-bg-layer-2, rgba(0,0,0,.025)); }
       .dwlp-dayhead strong { font-size: 12px; font-weight: 600; }
@@ -492,7 +491,7 @@ window.__ModuleLoader__.load({
       /* Nav glyph: the sidebar owns the row, button and label; this is only the mark. */
       .dwlp-glyph { position: relative; display: inline-flex; align-items: center; justify-content: center; }
       .dwlp-dot { position: absolute; top: 0; right: -1px; width: 6px; height: 6px; border-radius: 50%;
-        background: var(--dsw-alias-brand-primary, #247bbf);
+        background: var(--dsw-alias-button-info-fill, #2b6cf6);
         box-shadow: 0 0 0 1.5px var(--dsw-alias-bg-layer-1, #fff); }
     `
 
@@ -525,7 +524,7 @@ window.__ModuleLoader__.load({
                 href: token,
                 target: '_blank',
                 rel: 'noreferrer',
-                style: { color: 'var(--dsw-alias-brand-primary, #247bbf)' },
+                style: { color: 'var(--dsw-alias-link, #2b6cf6)' },
               },
               token,
             ),
