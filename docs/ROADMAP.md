@@ -168,8 +168,7 @@ because by then it is no longer news, but never clears a star.
 - A band under the page header, outside the scroll box: unread `high` entries plus every
   starred entry, newest first, capped at four. It is absent when empty, so it never
   steals space from the list.
-- History rows: an accent bar and an `重要` tag for high entries; a `☆`/`★` toggle on
-  every row.
+- History rows: an `重要` tag for high entries; a `☆`/`★` toggle on every row.
 - Sidebar badge: the number still counts unread progress, but turns amber while any of
   them is high — "one important" is a different kind of news than "three ordinary".
 - Native notification: content still one line, prefixed `重要：` when the run has a high

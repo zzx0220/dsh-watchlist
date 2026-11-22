@@ -633,11 +633,10 @@ window.__ModuleLoader__.load({
       .dwlp-band-summary { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
         color: var(--dsw-alias-label-secondary, #666); }
 
-      /* History rows: one finding per row, its star on its own, an accent bar when the
-         agent called it important. */
+      /* History rows: one finding per row, its star on its own, the importance tag on
+         the row itself. */
       .dwlp-item { display: flex; align-items: flex-start;
         border-top: 1px solid var(--dsw-alias-border-l1, rgba(0,0,0,.06)); }
-      .dwlp-item[data-important='true'] { box-shadow: inset 2px 0 0 var(--dsw-alias-state-warn-primary, #f59e0b); }
       .dwlp-item .dwlp-entry { border-top: 0; flex: 1; min-width: 0; }
       .dwlp-tag { display: inline-block; font-size: 10px; font-weight: 700; line-height: 16px;
         padding: 0 5px; margin-right: 6px; border-radius: 4px; vertical-align: 1px;
@@ -1081,7 +1080,6 @@ window.__ModuleLoader__.load({
                   {
                     key: entry.id || `${runRecord.id}-${index}`,
                     className: 'dwlp-item',
-                    'data-important': entry.importance === 'high' ? 'true' : 'false',
                   },
                   h(
                     'button',

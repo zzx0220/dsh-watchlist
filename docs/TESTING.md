@@ -304,8 +304,8 @@ change, wait for a poll or reopen the surface before judging it.
   the header and the scroll box, and scrolling the list never moves it. Each row has a
   `!` flag, the topic, a one-line summary and its own `☆`/`★`; clicking the row opens
   that run's reader. With neither kind present the band is absent — no empty box.
-- History rows: a `high` entry has an accent bar and an `重要` tag; `☆` stars it and
-  turns into `★` without touching read state or the badge.
+- History rows: a `high` entry has an `重要` tag; `☆` stars it and turns into `★`
+  without touching read state or the badge.
 
 ### L3.5 Reader
 
