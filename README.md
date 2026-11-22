@@ -71,8 +71,8 @@ initial value, runtime changes win and survive upgrades.
 ├── settings.json
 ├── state.json
 └── digests/
-    ├── runs.json
-    └── run-20261122T140500Z.md
+    ├── runs.json              # run index (one record per run)
+    └── day-2026-11-22.md      # at most one report file per day, one section per run
 ```
 
 ## Cadence

@@ -84,30 +84,74 @@ try {
     }
   })
 
-  check('a run writes one report file per run', () => {
+  check('a run writes into the day report', () => {
     const from = new Date(Date.now() - 5 * 86400000).toISOString()
+    const day = store.dayStamp('Asia/Shanghai')
     const run = store.startRun(dir, { from })
     assert.match(run.id, /^run-\d{8}T\d{6}Z$/)
+    assert.equal(run.day, day)
+    assert.equal(run.seq, 1)
     const r1 = store.appendRunEntry(dir, { topic: 'Some scientific advance', hasUpdate: true, summary: 'new paper', sources: ['paper - https://example.com/a'] })
     assert.equal(r1.runTotal, 1)
+    assert.equal(r1.dayTotal, 1)
+    assert.equal(r1.path, join(dir, 'digests', `day-${day}.md`))
     const r2 = store.appendRunEntry(dir, { topic: 'Some scientific advance', hasUpdate: false, summary: 'no further progress', sources: [] })
     assert.equal(r2.runTotal, 2)
-    assert.equal(r1.path, r2.path)
+    assert.equal(r2.path, r1.path)
     const text = readFileSync(r2.path, 'utf8')
-    assert.match(text, /# 关注清单巡检 /)
+    assert.match(text, /^# 关注清单日报 \d{4}-\d{2}-\d{2}$/m)
+    assert.match(text, /^## 第 1 次巡检 \d{2}:\d{2}$/m)
     assert.match(text, /覆盖区间：/)
-    assert.equal((text.match(/^## /gm) ?? []).length, 2)
+    assert.equal((text.match(/^## /gm) ?? []).length, 1)
+    assert.equal((text.match(/^### /gm) ?? []).length, 2)
     assert.equal(store.listRuns(dir).length, 1)
   })
 
-  check('a second run today gets its own file', () => {
+  check('a second run today appends to the same day file', () => {
     store.closeCurrentRun(dir)
+    const day = store.dayStamp('Asia/Shanghai')
     const run = store.startRun(dir, {})
-    store.appendRunEntry(dir, { topic: 'Some scientific advance', hasUpdate: false, summary: 'catch-up', sources: [] })
+    assert.equal(run.seq, 2)
+    const r1 = store.appendRunEntry(dir, { topic: 'Some scientific advance', hasUpdate: false, summary: 'catch-up', sources: [] })
+    assert.equal(r1.dayTotal, 3)
     const runs = store.listRuns(dir)
     assert.equal(runs.length, 2)
-    assert.notEqual(runs[0].path, runs[1].path)
     assert.equal(runs[0].id, run.id)
+    assert.equal(runs[0].path, runs[1].path, 'both runs share the day file')
+    assert.equal(r1.path, join(dir, 'digests', `day-${day}.md`))
+    const text = readFileSync(r1.path, 'utf8')
+    assert.equal((text.match(/^## /gm) ?? []).length, 2, 'one section per run')
+    assert.match(text, /^## 第 2 次巡检 /m)
+    assert.equal((text.match(/^# 关注清单日报 /gm) ?? []).length, 1, 'one day header only')
+  })
+
+  check('the day is frozen when the run starts, not when it records', () => {
+    const lateDir = mkdtempSync(join(tmpdir(), 'watchlist-day-'))
+    try {
+      const run = store.startRun(lateDir, { from: null, day: '2026-01-01' })
+      assert.equal(run.day, '2026-01-01')
+      assert.equal(run.file, 'day-2026-01-01.md')
+      const r = store.appendRunEntry(lateDir, { topic: 'Topic A', hasUpdate: false, summary: 'x', day: '2026-01-02' })
+      // The run keeps its own day even if the caller passes a later one.
+      assert.equal(r.path, join(lateDir, 'digests', 'day-2026-01-01.md'))
+      assert.equal(r.day, '2026-01-01')
+      assert.equal(store.listRuns(lateDir)[0].day, '2026-01-01')
+    } finally {
+      rmSync(lateDir, { recursive: true, force: true })
+    }
+  })
+
+  check('a record without a brief opens its own run and day file', () => {
+    const directDir = mkdtempSync(join(tmpdir(), 'watchlist-direct-'))
+    try {
+      const day = store.dayStamp('Asia/Shanghai')
+      const r = store.appendRunEntry(directDir, { topic: 'Topic B', hasUpdate: true, summary: 'y' })
+      assert.equal(r.day, day)
+      assert.equal(r.path, join(directDir, 'digests', `day-${day}.md`))
+      assert.equal(store.listRuns(directDir).length, 1)
+    } finally {
+      rmSync(directDir, { recursive: true, force: true })
+    }
   })
 
   check('unread counts entries after last seen', () => {

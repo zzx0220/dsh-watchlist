@@ -915,6 +915,7 @@ window.__ModuleLoader__.load({
       const runId = paramRunId || fallbackRunId || null
       const [text, setText] = useState('')
       const [error, setError] = useState('')
+      const [day, setDay] = useState('')
       useEffect(() => {
         if (!runId) return undefined
         let alive = true
@@ -923,8 +924,10 @@ window.__ModuleLoader__.load({
         act('read', { runId })
           .then((result) => {
             if (!alive) return
-            if (result && result.ok) setText(result.text)
-            else setError(String((result && result.error) || COPY.failed))
+            if (result && result.ok) {
+              setText(result.text)
+              setDay(result.day || '')
+            } else setError(String((result && result.error) || COPY.failed))
           })
           .catch((cause) => {
             if (alive) setError(String((cause && cause.message) || cause))
@@ -940,7 +943,8 @@ window.__ModuleLoader__.load({
         h(
           'div',
           { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, marginBottom: 10 } },
-          h('div', { style: { fontWeight: 600 } }, `${COPY.title} · ${fmt(runId)}`),
+          // One file per day: title the day file by its day, not by the run that opened it.
+          h('div', { style: { fontWeight: 600 } }, `${COPY.title} · ${day || fmt(runId)}`),
           h(
             'div',
             { style: { display: 'flex', gap: 8 } },
@@ -1009,8 +1013,35 @@ window.__ModuleLoader__.load({
       ]
     }
 
+    /** Runs grouped by their report file: one file per day, so one block per file.
+     *  Older records have no `file`; each of them is its own block. */
+    function groupRunsByFile(runs) {
+      const order = []
+      const byFile = new Map()
+      for (const run of runs) {
+        const key = run.file || run.path || run.id
+        if (!byFile.has(key)) {
+          byFile.set(key, [])
+          order.push(key)
+        }
+        byFile.get(key).push(run)
+      }
+      return order.map((key) => {
+        const list = byFile.get(key).slice().sort((a, b) => (String(a.startedAt) < String(b.startedAt) ? 1 : -1))
+        const first = list[0]
+        return {
+          key,
+          day: first.day || String(first.startedAt || '').slice(0, 10),
+          runs: list,
+          path: first.path || '',
+          entries: list.reduce((sum, run) => sum + run.entries.length, 0),
+        }
+      })
+    }
+
     function AllRuns({ state }) {
       const runs = (state && state.runs) || []
+      const groups = groupRunsByFile(runs)
       return [
         h('div', { key: 'backdrop', className: 'dwl-backdrop', onClick: closeEverything }),
         h(
@@ -1031,22 +1062,54 @@ window.__ModuleLoader__.load({
           h(
             'div',
             { className: 'dwl-reader-body' },
-            runs.length
-              ? runs.map((run) =>
+            groups.length
+              ? groups.map((group) =>
                   h(
                     'div',
-                    { key: run.id, style: { marginBottom: 14 } },
-                    h('div', { className: 'dwl-meta', style: { marginBottom: 4 } }, `${fmt(run.startedAt)} · ${run.entries.length}${zh() ? ' 条' : ''}`),
-                    run.entries.map((entry, index) =>
+                    { key: group.key, style: { marginBottom: 16 } },
+                    h(
+                      'button',
+                      {
+                        className: 'dwl-entry',
+                        style: { width: '100%' },
+                        onClick: () =>
+                          openReader(
+                            { runId: group.runs[0].id, path: group.path, from: group.runs[group.runs.length - 1].from, to: group.runs[0].to },
+                            'all',
+                          ),
+                      },
+                      h('div', { style: { fontWeight: 600 } }, group.day),
                       h(
-                        'button',
-                        {
-                          key: `${entry.at}-${index}`,
-                          className: 'dwl-entry',
-                          onClick: () => openReader({ runId: run.id, path: run.path, from: run.from, to: run.to }, 'all'),
-                        },
-                        h('div', null, entry.topic),
-                        h('div', { className: 'dwl-meta' }, entry.summary),
+                        'div',
+                        { className: 'dwl-meta' },
+                        `${group.runs.length}${zh() ? ' 次巡检' : group.runs.length === 1 ? ' run' : ' runs'} · ${group.entries}${zh() ? ' 条' : ''}`,
+                      ),
+                    ),
+                    group.runs.map((run) =>
+                      h(
+                        'div',
+                        { key: run.id, style: { marginTop: 6 } },
+                        // With one run per file the day header is enough; a shared day
+                        // file needs the run time to separate its sections.
+                        group.runs.length > 1
+                          ? h(
+                              'div',
+                              { className: 'dwl-meta', style: { marginBottom: 2 } },
+                              `${fmt(run.startedAt)}${run.seq ? (zh() ? ` · 第 ${run.seq} 次` : ` · run ${run.seq}`) : ''}`,
+                            )
+                          : null,
+                        run.entries.map((entry, index) =>
+                          h(
+                            'button',
+                            {
+                              key: `${entry.at}-${index}`,
+                              className: 'dwl-entry',
+                              onClick: () => openReader({ runId: run.id, path: run.path, from: run.from, to: run.to }, 'all'),
+                            },
+                            h('div', null, entry.topic),
+                            h('div', { className: 'dwl-meta' }, entry.summary),
+                          ),
+                        ),
                       ),
                     ),
                   ),

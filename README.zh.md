@@ -67,8 +67,8 @@ dsh plugin --profile desktop add /绝对路径/dsh-watchlist
 ├── settings.json   # 运行期设置
 ├── state.json      # 调度任务 id、最近巡检时间、当前 run
 └── digests/
-    ├── runs.json                       # 巡检索引（机读）
-    └── run-20261122T140500Z.md         # 每次巡检一份报告（不按天）
+    ├── runs.json                       # 巡检索引（机读，仍按次一条）
+    └── day-2026-11-22.md               # 每日最多一份报告，同一天多次巡检各占一节
 ```
 
 ## 检查频率

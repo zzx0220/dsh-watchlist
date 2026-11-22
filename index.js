@@ -17,7 +17,7 @@
  *   - Push per channel: session (always available), macOS notification (the
  *     client half posts one native notification per run, only when the run has
  *     progress and only after the run stops being written to; clicking it opens
- *     that run's report), WeChat (the Agent calls notify_wechat; the plugin does
+ *     that day's report), WeChat (the Agent calls notify_wechat; the plugin does
  *     not couple to the WeChat plugin).
  */
 import { execFile } from 'node:child_process'
@@ -220,6 +220,16 @@ export function apply(ctx, config) {
     if (routesRegistered || typeof webServer.register !== 'function') return
     routesRegistered = true
 
+    const RUN_ID_RE = /^run-\d{8}T\d{6}Z(?:-\d+)?$/
+    /**
+     * One file per day means the file name no longer carries the run: resolve the run
+     * record first, and fall back to the legacy per-run file for older records.
+     */
+    const reportOfRun = (runId) => {
+      const run = store.loadRuns(dataDir).find((item) => item.id === runId) || null
+      return { run, file: run ? store.reportPathOf(dataDir, run) : join(dataDir, 'digests', `${runId}.md`) }
+    }
+
     const buildState = async () => {
       const settings = settingsOf()
       const state = store.loadState(dataDir)
@@ -324,22 +334,29 @@ export function apply(ctx, config) {
           }
           if (type === 'read') {
             const runId = String(body.runId ?? '').trim()
-            if (!/^run-\d{8}T\d{6}Z(?:-\d+)?$/.test(runId)) return sendJson(res, 400, { ok: false, error: 'runId 格式不对' })
-            const file = join(dataDir, 'digests', `${runId}.md`)
+            if (!RUN_ID_RE.test(runId)) return sendJson(res, 400, { ok: false, error: 'runId 格式不对' })
+            const { run, file } = reportOfRun(runId)
             if (!existsSync(file)) return sendJson(res, 404, { ok: false, error: `没有 ${runId} 的报告文件` })
-            return sendJson(res, 200, { ok: true, runId, text: readFileSync(file, 'utf8') })
+            return sendJson(res, 200, {
+              ok: true,
+              runId,
+              day: run ? run.day ?? null : null,
+              seq: run ? run.seq ?? null : null,
+              path: file,
+              text: readFileSync(file, 'utf8'),
+            })
           }
           if (type === 'open') {
             const root = join(dataDir, 'digests')
             let file = null
             if (body.runId !== undefined && String(body.runId).trim()) {
               const runId = String(body.runId).trim()
-              if (!/^run-\d{8}T\d{6}Z(?:-\d+)?$/.test(runId)) return sendJson(res, 400, { ok: false, error: 'runId 格式不对' })
-              file = join(root, `${runId}.md`)
+              if (!RUN_ID_RE.test(runId)) return sendJson(res, 400, { ok: false, error: 'runId 格式不对' })
+              file = reportOfRun(runId).file
             } else if (body.path !== undefined && String(body.path).trim()) {
               file = resolve(String(body.path).trim())
             }
-            if (!file) return sendJson(res, 400, { ok: false, error: '需要 day 或 path' })
+            if (!file) return sendJson(res, 400, { ok: false, error: '需要 runId 或 path' })
             if (!file.startsWith(resolve(root) + sep)) return sendJson(res, 403, { ok: false, error: '只允许打开日报目录里的文件' })
             if (!file.endsWith('.md')) return sendJson(res, 400, { ok: false, error: '只允许打开 markdown 日报' })
             if (!existsSync(file)) return sendJson(res, 404, { ok: false, error: `文件不存在：${file}` })
@@ -545,7 +562,8 @@ export function apply(ctx, config) {
         return { topic, from: new Date(Number.isFinite(last) ? last : fallback).toISOString() }
       })
       const runFrom = windows.reduce((min, item) => (item.from < min ? item.from : min), windows[0].from)
-      const run = store.startRun(dataDir, { from: runFrom, to: new Date(now).toISOString() })
+      const run = store.startRun(dataDir, { from: runFrom, to: new Date(now).toISOString(), day: store.dayStamp(settings.timeZone) })
+      const reportPath = store.reportPathOf(dataDir, run)
       const lines = windows.map(
         (item, index) =>
           `${index + 1}. ${item.topic.topic}（id: ${item.topic.id}）｜窗口 ${store.formatStamp(item.from)} → 现在` +
@@ -558,11 +576,15 @@ export function apply(ctx, config) {
           `本次巡检 ${store.formatStamp(run.startedAt)}，到期 ${limited.length}/${store.loadTopics(dataDir).length} 个主题，推送 ${settings.push.channels.join('、') || '无'}`,
           ...lines,
           due.length > limited.length ? `（还有 ${due.length - limited.length} 个到期主题本轮跳过，下次轮到）` : null,
-          `落盘：每个主题调用一次 watchlist_record；本轮报告写到 ${join(dataDir, 'digests', `${run.id}.md`)}`,
+          `落盘：每个主题调用一次 watchlist_record；报告写到当日文件 ${reportPath}` +
+            `${run.seq > 1 ? `（本日第 ${run.seq} 次巡检，追加到同一文件的新小节）` : ''}`,
         ]
           .filter(Boolean)
           .join('\n'),
         runId: run.id,
+        runSeq: run.seq ?? 1,
+        day: run.day,
+        reportPath,
         from: run.from,
         to: run.to,
         dataDir,
@@ -583,7 +605,7 @@ export function apply(ctx, config) {
   tool({
     name: 'watchlist_record',
     description:
-      '记录一个主题本次的巡检结果：追加到本轮巡检的报告文件（每轮一份，不按天）。每个主题每次巡检调用一次；' +
+      '记录一个主题本次的巡检结果：追加到当日报告文件（每天最多一份；同一天的多次巡检各占一个小节）。每个主题每次巡检调用一次；' +
       'hasUpdate 为真表示有实质新进展。sources 每行一个来源，写成「标题 - 链接」。',
     parameters: {
       topic: { type: 'string', required: true, description: '主题 id 或主题名，来自 watchlist_run_brief' },
@@ -608,14 +630,18 @@ export function apply(ctx, config) {
         summary: args.summary,
         sources: args.sources ?? [],
         note: args.note,
+        day: store.dayStamp(settings.timeZone),
       })
       store.touchTopics(dataDir, [hit.id])
       return {
-        message: `已记录「${hit.topic}」→ ${result.path}（本轮第 ${result.runTotal} 条）`,
+        message: `已记录「${hit.topic}」→ ${result.path}（本次第 ${result.runTotal} 条｜当日第 ${result.dayTotal} 条）`,
         recorded: true,
         path: result.path,
         runId: result.runId,
         runTotal: result.runTotal,
+        dayTotal: result.dayTotal,
+        day: result.day,
+        seq: result.seq,
       }
     },
   })

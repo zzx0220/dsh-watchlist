@@ -31,7 +31,9 @@ Everything lives under `dataDir` (default `$DSH_HOME/watchlist`):
 - `topics.json` — the list
 - `settings.json` — runtime settings (override the bundle config)
 - `state.json` — schedule task id and last run time
-- `digests/YYYY-MM-DD.md` — one section per topic per run
+- `digests/day-YYYY-MM-DD.md` — at most one report file per day; a second
+  run on the same day appends one section per run, one entry per topic
+- `digests/runs.json` — the run index the panel and the report tab read
 
 ## Limitations to keep in mind
 
