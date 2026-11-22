@@ -61,6 +61,21 @@ const ctx = {
   effect: (fn) => fn(),
 }
 
+// 静态核对：代码里引用的 COPY.xxx 必须都在两个字典里
+{
+  const used = new Set([...src.matchAll(/COPY\.([A-Za-z0-9_]+)/g)].map((m) => m[1]))
+  used.delete('xxx') // 注释里的示例
+  const zh = src.slice(src.indexOf('      zh: {'), src.indexOf('      en: {'))
+  const en = src.slice(src.indexOf('      en: {'), src.indexOf('    }\n\n    // 用 Proxy'))
+  const keysOf = (block) => new Set([...block.matchAll(/^\s{8}([A-Za-z0-9_]+):/gm)].map((m) => m[1]))
+  const zhKeys = keysOf(zh)
+  const enKeys = keysOf(en)
+  const missingZh = [...used].filter((k) => !zhKeys.has(k))
+  const missingEn = [...used].filter((k) => !enKeys.has(k))
+  console.log('copy keys:', missingZh.length || missingEn.length ? `missing zh=${missingZh} en=${missingEn}` : 'complete')
+  if (missingZh.length || missingEn.length) process.exitCode = 1
+}
+
 console.log('inject:', mod.inject.join(','))
 mod.apply(ctx)
 console.log('registered:', registered.map((item) => item.name).join(' | '))
@@ -74,8 +89,13 @@ active = 'ja'
 for (const fn of subs) fn()
 console.log('labels(ja):', labels.map((item) => item.label()).join(' / '))
 
+const badText = []
 function walk(node, depth) {
   if (depth > 12 || node == null) return
+  if (typeof node === 'string') {
+    if (node.includes('undefined')) badText.push(node)
+    return
+  }
   if (Array.isArray(node)) {
     node.forEach((item) => walk(item, depth))
     return
@@ -132,6 +152,11 @@ for (const [label, key, props] of [
     failures += 1
     console.log(`render ${label}: FAIL ${error.message}`)
   }
+}
+
+if (badText.length) {
+  failures += 1
+  console.log(`渲染出 undefined 文案: ${JSON.stringify(badText.slice(0, 3))}`)
 }
 
 if (failures) {
