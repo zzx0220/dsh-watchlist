@@ -441,10 +441,17 @@ window.__ModuleLoader__.load({
       .dwlp-head-actions { display: flex; align-items: center; gap: 10px; flex: none; padding-top: 2px; }
       .dwlp-chip { font-size: 11px; font-weight: 600; padding: 2px 9px; border-radius: 999px;
         background: var(--dsw-alias-button-info-fill, #2b6cf6); color: #fff; }
-      .dwlp-primary { border-color: transparent; font-weight: 600; padding: 4px 12px;
-        background: var(--dsw-alias-button-primary-fill, #1f1f1f);
-        color: var(--dsw-alias-label-primary-foreground, #fff); }
-      .dwlp-primary:hover { background: var(--dsw-alias-button-primary-hover, #3d3d3d); }
+      /* The page's one action, but not a high-contrast slab: a faint accent tint with a
+         normal-weight label reads as a button without pulling the eye off the content.
+         The second declaration wins where color-mix is supported; the first is the
+         neutral fallback. */
+      .dwlp-primary { font-weight: 600; padding: 4px 12px;
+        border: 1px solid var(--dsw-alias-border-l3, rgba(0,0,0,.12));
+        background: var(--dsw-alias-interactive-bg-hover-accent, rgba(0,0,0,.06));
+        background: color-mix(in srgb, var(--dsw-alias-link, #2b6cf6) 9%, transparent);
+        color: var(--dsw-alias-label-primary, inherit); }
+      .dwlp-primary:hover { background: var(--dsw-alias-interactive-bg-hover-accent, rgba(0,0,0,.1));
+        background: color-mix(in srgb, var(--dsw-alias-link, #2b6cf6) 16%, transparent); }
       .dwlp-scroll { flex: 1; min-height: 0; overflow: auto; }
       .dwlp-inner { max-width: 940px; margin: 0 auto; padding: 20px 32px 56px;
         display: flex; flex-direction: column; gap: 16px; }
