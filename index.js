@@ -269,9 +269,7 @@ export function apply(ctx, config) {
           task,
         },
         runs: store.listRuns(dataDir, 14),
-        unread: store.unreadCount(dataDir),
-        unreadUpdates: store.unreadUpdateCount(dataDir),
-        unreadRunIds: store.unseenRunIds(dataDir),
+        ...store.counters(dataDir),
         lastSeenAt: state.lastSeenAt ?? null,
       }
     }
@@ -299,12 +297,7 @@ export function apply(ctx, config) {
         if (!isLoopback(req)) return sendJson(res, 403, { ok: false, error: 'loopback only' })
         if (req.method !== 'GET') return sendJson(res, 405, { ok: false, error: 'GET only' })
         try {
-          sendJson(res, 200, {
-            ok: true,
-            unread: store.unreadCount(dataDir),
-            unreadUpdates: store.unreadUpdateCount(dataDir),
-            unreadRunIds: store.unseenRunIds(dataDir),
-          })
+          sendJson(res, 200, { ok: true, ...store.counters(dataDir) })
         } catch (error) {
           sendJson(res, 500, { ok: false, error: String(error?.message ?? error) })
         }
@@ -330,12 +323,7 @@ export function apply(ctx, config) {
               store.markSeen(dataDir)
             }
             // Answer with the new counts so the badge can move without a second round trip.
-            return sendJson(res, 200, {
-              ok: true,
-              unread: store.unreadCount(dataDir),
-              unreadUpdates: store.unreadUpdateCount(dataDir),
-              unreadRunIds: store.unseenRunIds(dataDir),
-            })
+            return sendJson(res, 200, { ok: true, ...store.counters(dataDir) })
           }
           if (type === 'add') {
             const result = store.addTopic(dataDir, body)

@@ -1274,9 +1274,11 @@ window.__ModuleLoader__.load({
         return () => clearInterval(timer)
       }, [reload])
       // The badge has to move while the user is somewhere else in the app, so it polls a
-      // tiny counts endpoint instead of waiting for the minute-long full refresh.
+      // counts endpoint instead of waiting for the minute-long full refresh. A hidden
+      // window backs off: nobody reads a badge they are not looking at.
       useEffect(() => {
         let alive = true
+        let timer = null
         const tick = async () => {
           try {
             const data = await getCounts()
@@ -1289,11 +1291,22 @@ window.__ModuleLoader__.load({
             /* A failed poll is not an error worth showing; the next one retries */
           }
         }
+        const visible = () => typeof document === 'undefined' || document.visibilityState !== 'hidden'
+        const schedule = () => {
+          if (timer) clearInterval(timer)
+          timer = setInterval(tick, visible() ? 5000 : 30000)
+        }
         tick()
-        const timer = setInterval(tick, 5000)
+        schedule()
+        if (typeof document !== 'undefined' && typeof document.addEventListener === 'function') {
+          document.addEventListener('visibilitychange', schedule)
+        }
         return () => {
           alive = false
-          clearInterval(timer)
+          if (timer) clearInterval(timer)
+          if (typeof document !== 'undefined' && typeof document.removeEventListener === 'function') {
+            document.removeEventListener('visibilitychange', schedule)
+          }
         }
       }, [])
       useEffect(() => {
