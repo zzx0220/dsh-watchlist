@@ -257,7 +257,15 @@ window.__ModuleLoader__.load({
       ui.all = false
       notifyUi()
     }
-    /** Close every layer at once (backdrop click, the ✕ control). */
+    /** Step back one layer: the same effect as Escape and the "← Back" control. */
+    function stepBack() {
+      const ui = uiStore()
+      if (ui.reader) closeReader()
+      else if (ui.all) closeAll()
+      else if (ui.open) setOpen(false)
+    }
+
+    /** Close every layer at once (the ✕ control). */
     function closeEverything() {
       const ui = uiStore()
       ui.open = false
@@ -342,6 +350,9 @@ window.__ModuleLoader__.load({
       .dwl-btn:disabled { opacity: .5; cursor: default; }
       .dwl-input { border: 1px solid var(--dsw-alias-border-l2, #ccc); background: var(--dsw-alias-bg-layer-1, #fff); color: inherit;
         border-radius: 6px; padding: 4px 8px; font-size: 12px; }
+      .dwl-back { min-height: 28px; min-width: 64px; padding: 4px 12px; font-size: 12px; flex: 0 0 auto;
+        display: inline-flex; align-items: center; justify-content: center; cursor: pointer; user-select: none;
+        -webkit-app-region: no-drag; }
       .dwl-inline { display: flex; align-items: center; gap: 8px; margin-top: 4px; flex-wrap: wrap; }
       .dwl-field { display: flex; align-items: center; gap: 8px; margin: 6px 0; flex-wrap: wrap; }
       .dwl-field > span { min-width: 84px; color: var(--dsw-alias-label-secondary, #666); }
@@ -365,7 +376,7 @@ window.__ModuleLoader__.load({
         padding: 6px 4px; border-radius: 6px; cursor: pointer; font: inherit; font-size: 12px; }
       .dwl-entry:hover { background: var(--dsw-alias-bg-layer-2, rgba(0,0,0,.05)); }
       .dwl-backdrop { position: fixed; inset: 0; z-index: 39; background: rgba(0, 0, 0, .18); pointer-events: auto; }
-      .dwl-reader { pointer-events: auto; position: fixed; top: 6vh; left: 7vw; right: 7vw; bottom: 6vh; z-index: 40; display: flex; flex-direction: column;
+      .dwl-reader { -webkit-app-region: no-drag; pointer-events: auto; position: fixed; top: 6vh; left: 7vw; right: 7vw; bottom: 6vh; z-index: 40; display: flex; flex-direction: column;
         background: var(--dsw-alias-bg-overlay, #fff); color: var(--dsw-alias-label-primary, #111);
         border: 1px solid var(--dsw-alias-border-l1, #ddd); border-radius: 12px; box-shadow: 0 18px 48px rgba(0,0,0,.22);
         font-size: 13px; overflow: hidden; }
@@ -856,7 +867,7 @@ window.__ModuleLoader__.load({
     function AllRuns({ state }) {
       const runs = (state && state.runs) || []
       return [
-        h('div', { key: 'backdrop', className: 'dwl-backdrop', onClick: closeEverything }),
+        h('div', { key: 'backdrop', className: 'dwl-backdrop', onClick: stepBack }),
         h(
           'div',
           { key: 'card', className: 'dwl dwl-reader', role: 'dialog', 'aria-label': COPY.allTitle },
@@ -867,7 +878,7 @@ window.__ModuleLoader__.load({
             h(
               'div',
               { style: { display: 'flex', gap: 8, alignItems: 'center' } },
-              h('button', { className: 'dwl-btn', onClick: closeAll, title: COPY.back }, `← ${COPY.back}`),
+              h('button', { className: 'dwl-btn dwl-back', onClick: closeAll, title: COPY.back }, `← ${COPY.back}`),
               h('div', { style: { fontWeight: 600 } }, COPY.allTitle),
             ),
             h('div', { style: { display: 'flex', gap: 8 } }, h('button', { className: 'dwl-btn', onClick: closeEverything }, COPY.closeAll)),
@@ -923,7 +934,7 @@ window.__ModuleLoader__.load({
         }
       }, [view.runId])
       return [
-        h('div', { key: 'backdrop', className: 'dwl-backdrop', onClick: closeEverything }),
+        h('div', { key: 'backdrop', className: 'dwl-backdrop', onClick: stepBack }),
         h(
         'div',
         { key: 'card', className: 'dwl dwl-reader', role: 'dialog', 'aria-label': COPY.title },
@@ -934,7 +945,7 @@ window.__ModuleLoader__.load({
           h(
             'div',
             { style: { minWidth: 0, display: 'flex', gap: 8, alignItems: 'flex-start' } },
-            h('button', { className: 'dwl-btn', onClick: closeReader, title: COPY.back }, `← ${COPY.back}`),
+            h('button', { className: 'dwl-btn dwl-back', onClick: closeReader, title: COPY.back }, `← ${COPY.back}`),
             h(
               'div',
               { style: { minWidth: 0 } },
