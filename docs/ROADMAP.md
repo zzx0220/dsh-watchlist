@@ -25,6 +25,25 @@ Design agreed on 2026-11-22. Recorded here so the later implementation has a fix
 
 **Acceptance** — 3 topics, 2 with progress → exactly one notification per run, naming those 2 topics, and clicking it shows that run's report.
 
+### 2. UI polish: footer entry and report Markdown — awaiting user design (2026-11-22)
+
+Two things the user is not satisfied with. The change itself is not decided yet: the
+user will describe the intended look, and this section should then be turned into a
+concrete spec. Do not implement a guessed design before that.
+
+1. **Bottom-left watchlist entry** — the icon plus label in the left nav footer looks
+   stiff and plain. `.dwl-footer-btn` in `client.js` is a flat transparent button: a
+   16×16 SVG bullseye (three concentric circles), a 12px label when the nav is wide, and
+   an unread badge; the only state change is a hover background.
+2. **Right-sidebar report rendering** — reports look bad as rendered. The `Markdown`
+   component in `client.js` is a deliberate minimal renderer: `# ` / `## ` heading lines
+   become styled divs, `-` / `*` bullets become one `<ul>`, and inline text supports only
+   `**bold**` plus bare URLs. Paragraphs are plain divs with a 3px vertical margin, so
+   there are no code blocks, blockquotes, tables, horizontal rules, nested lists, or a
+   third heading level, and no reading column. Both the in-app reader body
+   (`.dwl-reader-body`) and the right-sidebar report tab (inline padding `10px 14px`) feed
+   the same component, so any fix has to look right in both widths.
+
 ---
 
 ## 已知待办
@@ -51,3 +70,18 @@ Design agreed on 2026-11-22. Recorded here so the later implementation has a fix
 - 与 `push.mode = per-topic` 互斥：该模式下才允许逐条通知。
 
 **验收**：3 个主题、其中 2 个有进展 → 一次巡检只弹 1 条通知，文案含那 2 个主题名，点击后能看到该次报告。
+
+### 2. 界面美化：左下角入口与报告 Markdown——等用户给出改法（2026-11-22）
+
+用户明确提出两处不满意。改法尚未确定：等用户描述想要的效果后，再把本节改写成
+可执行的规格。在此之前不要按猜测动手。
+
+1. **左下角关注清单入口**——左侧导航底部那枚「图标 + 文字」按钮观感呆板、单调。
+   `client.js` 里的 `.dwl-footer-btn` 是裸的透明按钮：一枚 16×16 的 SVG 圆环靶心（三层
+   同心圆）+ 导航展开时的 12px 文字标签 + 未读角标；唯一的交互反馈是 hover 变背景。
+2. **右侧栏报告渲染**——报告渲染出来不好看。`client.js` 的 `Markdown` 组件是刻意做的
+   最小实现：`# ` / `## ` 行变成带样式的 div，`-` / `*` 列表收成一个 `<ul>`，行内只认
+   `**加粗**` 和裸 URL。段落是 3px 上下边距的普通 div，因此没有代码块、引用、表格、
+   分隔线、嵌套列表，也没有第三级标题，更没有阅读栏宽。应用内阅读器正文
+   （`.dwl-reader-body`）和右侧栏报告标签页（内联 `10px 14px` 边距）共用同一个组件，
+   所以改法要同时照顾这两种宽度下的观感。
