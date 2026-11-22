@@ -48,6 +48,7 @@ window.__ModuleLoader__.load({
       zh: {
         nav: '关注清单',
         title: '关注清单',
+        subtitle: '长期追踪你关心的话题：按次检索进展、落盘日报，并推送到你想要的地方。',
         dataDir: '数据目录',
         topics: '主题',
         empty: '还没有主题，添加一个想长期追踪的题目。',
@@ -55,8 +56,6 @@ window.__ModuleLoader__.load({
         add: '添加',
         remove: '删除',
         runNow: '立即运行一次',
-        running: '已投递',
-        settings: '巡检设置',
         defaultSettings: '默认巡检设置',
         defaultHint: '新添加的主题默认沿用这里；每个主题可单独设置间隔。',
         interval: '检查间隔',
@@ -87,20 +86,12 @@ window.__ModuleLoader__.load({
         digests: '日报',
         openFile: '用外部程序打开',
         openSidebar: '在侧栏打开',
-        needSession: '没有可用的会话，先用下面的内联阅读',
-        noHost: '当前版本没有侧栏预览服务，先用下面的内联阅读',
         noDigest: '还没有巡检记录。',
         lastRun: '上次巡检',
         never: '尚未巡检',
         unread: '未读',
         close: '关闭',
-        openExternal: '外部打开',
         entryHint: '点条目直接阅读',
-        viewAll: '查看全部',
-        back: '返回',
-        closeAll: '关闭全部',
-        allTitle: '全部巡检记录',
-        openSettings: '在 设置 → 关注清单 中管理',
         loading: '加载中…',
         failed: '加载失败',
         next: '下次触发',
@@ -109,6 +100,7 @@ window.__ModuleLoader__.load({
       en: {
         nav: 'Watchlist',
         title: 'Watchlist',
+        subtitle: 'Follow the topics you care about: scheduled searches, a daily digest on disk, and pushes where you want them.',
         dataDir: 'Data',
         topics: 'Topics',
         empty: 'No topics yet. Add something you want to follow.',
@@ -116,8 +108,6 @@ window.__ModuleLoader__.load({
         add: 'Add',
         remove: 'Remove',
         runNow: 'Run now',
-        running: 'Queued',
-        settings: 'Schedule',
         defaultSettings: 'Default schedule',
         defaultHint: 'Applies to new topics; each topic can override it.',
         interval: 'Interval',
@@ -148,20 +138,12 @@ window.__ModuleLoader__.load({
         digests: 'Digests',
         openFile: 'Open externally',
         openSidebar: 'Open in sidebar',
-        needSession: 'No session available; read inline below',
-        noHost: 'Sidebar preview unavailable; read inline below',
         noDigest: 'No digests yet.',
         lastRun: 'Last run',
         never: 'never',
         unread: 'unread',
         close: 'Close',
-        openExternal: 'Open externally',
         entryHint: 'Click an entry to read',
-        viewAll: 'View all',
-        back: 'Back',
-        closeAll: 'Close all',
-        allTitle: 'All runs',
-        openSettings: 'Manage in Settings → Watchlist',
         loading: 'Loading…',
         failed: 'Failed to load',
         next: 'Next run',
@@ -258,7 +240,7 @@ window.__ModuleLoader__.load({
     /** Fall back to the in-app reader when the sidebar tab is unavailable. */
     function openRunReport(run) {
       if (!run || !run.id) return
-      openReader({ runId: run.id, path: run.path, from: run.from, to: run.to }, 'all')
+      openReader({ runId: run.id, path: run.path, from: run.from, to: run.to })
     }
 
     function notifyRun(run, test) {
@@ -331,64 +313,35 @@ window.__ModuleLoader__.load({
       }
     }
 
-    /* ---------- Shared overlay switch: the footer button and the overlay live in different subtrees ---------- */
+    /* ---------- Shared UI state: the nav icon and the reader overlay live in different subtrees ---------- */
     /**
-     * Overlay state lives on window rather than in module scope: the client module
-     * may be loaded more than once, and module-level state would give the footer
-     * button and shell.overlay separate copies, so clicks would never land.
+     * This state lives on window rather than in module scope: the client module may
+     * be loaded more than once, and module-level state would give the nav icon and
+     * shell.overlay separate copies, so the unread dot and clicks would never agree.
      */
     function uiStore() {
-      if (!window.__dshWatchlistUi) window.__dshWatchlistUi = { open: false, all: false, reader: null, backTo: null, dataRev: 0, listeners: new Set() }
+      if (!window.__dshWatchlistUi) window.__dshWatchlistUi = { reader: null, unread: 0, listeners: new Set() }
       return window.__dshWatchlistUi
-    }
-    function bumpData() {
-      const ui = uiStore()
-      ui.dataRev += 1
-      notifyUi()
     }
     function notifyUi() {
       for (const listener of uiStore().listeners) listener()
     }
-    function setOpen(value) {
-      uiStore().open = value
-      notifyUi()
-    }
-    function openAll() {
+    /** Publish the unread count from whichever polling component last read the state. */
+    function setUnread(value) {
       const ui = uiStore()
-      ui.all = true
-      ui.open = false
+      const next = Number(value) || 0
+      if (ui.unread === next) return
+      ui.unread = next
       notifyUi()
     }
-    function closeAll() {
-      const ui = uiStore()
-      ui.all = false
-      ui.open = true
-      notifyUi()
-    }
-    function openReader(view, from = 'panel') {
+    function openReader(view) {
       const ui = uiStore()
       ui.reader = view
-      ui.backTo = from
-      ui.open = false
-      ui.all = false
-      notifyUi()
-    }
-    /** Close every layer at once (the ✕ control). */
-    function closeEverything() {
-      const ui = uiStore()
-      ui.open = false
-      ui.all = false
-      ui.reader = null
-      ui.backTo = null
       notifyUi()
     }
     function closeReader() {
       const ui = uiStore()
-      const back = ui.backTo
       ui.reader = null
-      ui.backTo = null
-      if (back === 'all') ui.all = true
-      else if (back === 'panel') ui.open = true
       notifyUi()
     }
     function useUiState() {
@@ -400,7 +353,7 @@ window.__ModuleLoader__.load({
         return () => ui.listeners.delete(listener)
       }, [])
       const ui = uiStore()
-      return { open: ui.open, all: ui.all, reader: ui.reader, backTo: ui.backTo, dataRev: ui.dataRev }
+      return { reader: ui.reader, unread: ui.unread }
     }
 
     function useWatchlist() {
@@ -492,6 +445,63 @@ window.__ModuleLoader__.load({
       .dwl-reader-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px;
         padding: 12px 14px; border-bottom: 1px solid var(--dsw-alias-border-l1, #e5e5e5); }
       .dwl-reader-body { flex: 1; overflow: auto; padding: 14px 18px; line-height: 1.75; }
+
+      /* ---------- Main panel page: the whole watchlist in one surface ---------- */
+      .dwlp { height: 100%; min-height: 0; display: flex; flex-direction: column;
+        background: var(--dsw-alias-bg-layer-1, transparent); }
+      .dwlp-head { flex: none; display: flex; align-items: flex-start; justify-content: space-between; gap: 18px;
+        padding: 22px 32px 16px; border-bottom: 1px solid var(--dsw-alias-border-l1, rgba(0,0,0,.08)); }
+      .dwlp-eyebrow { font-size: 10px; font-weight: 600; letter-spacing: .1em; text-transform: uppercase;
+        color: var(--dsw-alias-label-tertiary, var(--dsw-alias-label-secondary, #8a8a8a)); }
+      .dwlp-title { margin-top: 4px; font-size: 19px; font-weight: 650; line-height: 1.3; }
+      .dwlp-sub { margin-top: 5px; font-size: 12px; line-height: 1.6; max-width: 60ch;
+        color: var(--dsw-alias-label-secondary, #666); }
+      .dwlp-head-actions { display: flex; align-items: center; gap: 10px; flex: none; padding-top: 2px; }
+      .dwlp-chip { font-size: 11px; font-weight: 600; padding: 2px 9px; border-radius: 999px;
+        background: var(--dsw-alias-brand-primary, #247bbf); color: #fff; }
+      .dwlp-primary { border-color: transparent; background: var(--dsw-alias-brand-primary, #247bbf); color: #fff;
+        font-weight: 600; padding: 4px 12px; }
+      .dwlp-primary:hover { background: var(--dsw-alias-brand-primary, #247bbf); filter: brightness(1.08); }
+      .dwlp-scroll { flex: 1; min-height: 0; overflow: auto; }
+      .dwlp-inner { max-width: 940px; margin: 0 auto; padding: 20px 32px 56px;
+        display: flex; flex-direction: column; gap: 16px; }
+      .dwlp-card { border: 1px solid var(--dsw-alias-border-l1, rgba(0,0,0,.09)); border-radius: 12px;
+        background: var(--dsw-alias-bg-layer-2, rgba(0,0,0,.018)); padding: 15px 17px 16px; }
+      .dwlp-cardhead { display: flex; align-items: baseline; justify-content: space-between; gap: 14px; margin-bottom: 11px; }
+      .dwlp-cardhead h2 { margin: 0; font-size: 13px; font-weight: 600; }
+      .dwlp-cardhead .dwl-meta { font-size: 11px; text-align: right; }
+      .dwlp-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(248px, 1fr)); gap: 2px 24px; }
+      .dwlp-fields .dwl-field { margin: 4px 0; }
+      .dwlp-add { display: flex; gap: 8px; margin-bottom: 12px; }
+      .dwlp-topics { display: grid; grid-template-columns: repeat(auto-fill, minmax(232px, 1fr)); gap: 10px; }
+      .dwlp-topic { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px;
+        border: 1px solid var(--dsw-alias-border-l1, rgba(0,0,0,.09)); border-radius: 10px;
+        background: var(--dsw-alias-bg-layer-1, transparent); }
+      .dwlp-topic-name { font-size: 13px; font-weight: 600; line-height: 1.45; word-break: break-word; }
+      .dwlp-topic-foot { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 2px; }
+      .dwlp-topic-foot .dwl-meta { font-size: 11px; }
+      .dwlp-mini { padding: 1px 5px; font-size: 11px; }
+      .dwlp-icon-btn { border: 0; background: none; color: var(--dsw-alias-label-secondary, #777);
+        cursor: pointer; padding: 2px 6px; border-radius: 6px; font-size: 11px; font: inherit; font-size: 11px; }
+      .dwlp-icon-btn:hover { background: var(--dsw-alias-bg-layer-2, rgba(0,0,0,.06));
+        color: var(--dsw-alias-state-error-primary, #c00); }
+      .dwlp-history { display: flex; flex-direction: column; gap: 8px; }
+      .dwlp-day { border: 1px solid var(--dsw-alias-border-l1, rgba(0,0,0,.09)); border-radius: 10px; overflow: hidden; }
+      .dwlp-dayhead { display: flex; align-items: baseline; justify-content: space-between; gap: 10px;
+        padding: 8px 12px; background: var(--dsw-alias-bg-layer-2, rgba(0,0,0,.025)); }
+      .dwlp-dayhead strong { font-size: 12px; font-weight: 600; }
+      .dwlp-dayhead .dwl-meta { font-size: 11px; }
+      .dwlp-entry { display: block; width: 100%; text-align: left; border: 0; cursor: pointer;
+        border-top: 1px solid var(--dsw-alias-border-l1, rgba(0,0,0,.06));
+        background: none; color: inherit; font: inherit; font-size: 12px; padding: 8px 12px; }
+      .dwlp-entry:hover { background: var(--dsw-alias-bg-layer-2, rgba(0,0,0,.04)); }
+      .dwlp-empty { font-size: 12px; color: var(--dsw-alias-label-secondary, #666); padding: 6px 0; }
+
+      /* Nav glyph: the sidebar owns the row, button and label; this is only the mark. */
+      .dwlp-glyph { position: relative; display: inline-flex; align-items: center; justify-content: center; }
+      .dwlp-dot { position: absolute; top: 0; right: -1px; width: 6px; height: 6px; border-radius: 50%;
+        background: var(--dsw-alias-brand-primary, #247bbf);
+        box-shadow: 0 0 0 1.5px var(--dsw-alias-bg-layer-1, #fff); }
     `
 
     function StyleTag() {
@@ -614,84 +624,13 @@ window.__ModuleLoader__.load({
       )
     }
 
-    function WatchlistPage() {
-      useLang()
-      const { state, error, busy, run } = useWatchlist()
-      const [draft, setDraft] = useState('')
-      const [keywords, setKeywords] = useState('')
-      const [every, setEvery] = useState('')
-      const [notifyNotice, setNotifyNotice] = useState('')
-      if (!state) return h('div', { className: 'dwl' }, h(StyleTag), error || COPY.loading)
+    /* ---------- Shared controls: the settings section and the sidebar page render the same fields ---------- */
 
-      const settings = state.settings || {}
-      const schedule = state.schedule || {}
-
-      const patchSettings = (patch) => run('settings', { patch })
-
-      const addTopic = async () => {
-        const topic = draft.trim()
-        if (!topic) return
-        await run('add', { topic, keywords: keywords.split(/[,，\s]+/).filter(Boolean), everyDays: every ? Number(every) : undefined })
-        setDraft('')
-        setKeywords('')
-        setEvery('')
-      }
-
+    /** Default schedule: auto-run, frequency and time, lookback and the per-run cap. */
+    function ScheduleFields({ settings, schedule, busy, patchSettings, run }) {
       return h(
         'div',
-        { className: 'dwl' },
-        h(StyleTag),
-        h(ErrorLine, { text: error }),
-
-        h(
-          'div',
-          { className: 'dwl-meta' },
-          `${COPY.dataDir}：${state.dataDir} · ${state.topics.length} ${zh() ? '个主题' : 'topics'}`,
-        ),
-
-        h('h3', null, COPY.topics),
-        h(
-          'div',
-          { className: 'dwl-row' },
-          h('input', {
-            className: 'dwl-input dwl-grow',
-            placeholder: COPY.addPlaceholder,
-            value: draft,
-            onChange: (event) => setDraft(event.target.value),
-            onKeyDown: (event) => {
-              if (event.key === 'Enter') addTopic()
-            },
-          }),
-          h(
-            'select',
-            {
-              className: 'dwl-input',
-              value: every,
-              onChange: (event) => setEvery(event.target.value),
-              title: COPY.interval,
-            },
-            h('option', { value: '' }, COPY.iDefault),
-            h('option', { value: '1' }, COPY.iDay),
-            h('option', { value: '7' }, COPY.iWeek),
-            h('option', { value: '30' }, COPY.iMonth),
-          ),
-          h('button', { className: 'dwl-btn', disabled: busy || !draft.trim(), onClick: addTopic }, COPY.add),
-        ),
-        state.topics.length
-          ? state.topics.map((topic) =>
-              h(TopicRow, {
-                key: topic.id,
-                topic,
-                busy,
-                onRemove: (item) => run('remove', { target: item.id }),
-                onSetInterval: (item, value) =>
-                  run('update-topic', { target: item.id, everyDays: value ? Number(value) : 0 }),
-              }),
-            )
-          : h('div', { className: 'dwl-empty' }, COPY.empty),
-
-        h('h3', null, COPY.defaultSettings),
-        h('div', { className: 'dwl-meta', style: { marginBottom: 4 } }, COPY.defaultHint),
+        { className: 'dwlp-fields' },
         h(
           'div',
           { className: 'dwl-field' },
@@ -720,8 +659,7 @@ window.__ModuleLoader__.load({
           ),
           h('span', null, COPY.time),
           h('input', {
-            className: 'dwl-input',
-            style: { width: 70 },
+            className: 'dwl-input dwlp-mini',
             value: (settings.schedule && settings.schedule.time) || '08:30',
             onChange: (event) => patchSettings({ schedule: { time: event.target.value } }),
           }),
@@ -731,16 +669,14 @@ window.__ModuleLoader__.load({
           { className: 'dwl-field' },
           h('span', null, COPY.lookback),
           h('input', {
-            className: 'dwl-input',
-            style: { width: 60 },
+            className: 'dwl-input dwlp-mini',
             type: 'number',
             value: settings.lookbackDays || 7,
             onChange: (event) => patchSettings({ lookbackDays: Number(event.target.value) || 7 }),
           }),
           h('span', null, COPY.maxTopics),
           h('input', {
-            className: 'dwl-input',
-            style: { width: 60 },
+            className: 'dwl-input dwlp-mini',
             type: 'number',
             value: settings.maxTopicsPerRun || 8,
             onChange: (event) => patchSettings({ maxTopicsPerRun: Number(event.target.value) || 8 }),
@@ -750,11 +686,17 @@ window.__ModuleLoader__.load({
           'div',
           { className: 'dwl-field dwl-meta' },
           h('span', null, COPY.next),
-          schedule.timing,
-          schedule.task ? ` · ${schedule.task.status}` : '',
+          `${schedule.timing || '—'}${schedule.task ? ` · ${schedule.task.status}` : ''}`,
         ),
+      )
+    }
 
-        h('h3', null, COPY.push),
+    /** Push channels plus the test-notification button. */
+    function PushFields({ settings, state, patchSettings, notifyNotice, setNotifyNotice }) {
+      const channels = (settings.push && settings.push.channels) || []
+      return h(
+        'div',
+        { className: 'dwlp-fields' },
         h(
           'div',
           { className: 'dwl-field' },
@@ -764,10 +706,11 @@ window.__ModuleLoader__.load({
               { className: 'dwl-check', key: channel },
               h('input', {
                 type: 'checkbox',
-                checked: ((settings.push && settings.push.channels) || []).includes(channel),
+                checked: channels.includes(channel),
                 onChange: (event) => {
-                  const current = (settings.push && settings.push.channels) || []
-                  const next = event.target.checked ? [...new Set([...current, channel])] : current.filter((c) => c !== channel)
+                  const next = event.target.checked
+                    ? [...new Set([...channels, channel])]
+                    : channels.filter((item) => item !== channel)
                   patchSettings({ push: { channels: next.length ? next : ['session'] } })
                 },
               }),
@@ -799,12 +742,17 @@ window.__ModuleLoader__.load({
           ),
           notifyNotice ? h('span', { className: 'dwl-meta' }, notifyNotice) : null,
         ),
+      )
+    }
 
-        h('h3', null, COPY.language),
+    /** Interface language: follow DSH, or pin one. */
+    function LanguageFields({ settings, patchSettings }) {
+      return h(
+        'div',
+        { className: 'dwlp-fields' },
         h(
           'div',
           { className: 'dwl-field' },
-          h('span', null, COPY.language),
           h(
             'select',
             {
@@ -817,50 +765,315 @@ window.__ModuleLoader__.load({
             h('option', { value: 'en' }, 'English'),
           ),
         ),
-
       )
     }
 
-    function FooterAction(props) {
-      useLang()
-      const { state, reload } = useWatchlist()
-      const { open, reader: readerOpen, dataRev } = useUiState()
-      useEffect(() => {
-        reload()
-      }, [reload, dataRev])
-      useEffect(() => {
-        const timer = setInterval(reload, 60000)
-        return () => clearInterval(timer)
-      }, [reload])
-      useRunNotifier(state)
-      const unread = (state && state.unread) || 0
-      const wide = props && props.wide !== false
+    /** Add row with its own draft, so typing does not re-render the surrounding page. */
+    function AddTopicBar({ busy, onAdd }) {
+      const [draft, setDraft] = useState('')
+      const [every, setEvery] = useState('')
+      const submit = () => {
+        const topic = draft.trim()
+        if (!topic) return
+        onAdd(topic, every)
+        setDraft('')
+        setEvery('')
+      }
       return h(
-        'button',
-        {
-          className: 'dwl-footer-btn',
-          title: COPY.nav,
-          style: open || readerOpen ? { background: 'var(--dsw-alias-bg-layer-2, rgba(0,0,0,.08))' } : undefined,
-          onClick: () => {
-            if (readerOpen) {
-              closeReader()
-              return
-            }
-            setOpen(!open)
+        'div',
+        { className: 'dwlp-add' },
+        h('input', {
+          className: 'dwl-input dwl-grow',
+          placeholder: COPY.addPlaceholder,
+          value: draft,
+          onChange: (event) => setDraft(event.target.value),
+          onKeyDown: (event) => {
+            if (event.key === 'Enter') submit()
           },
-        },
+        }),
+        h(
+          'select',
+          {
+            className: 'dwl-input',
+            value: every,
+            title: COPY.interval,
+            onChange: (event) => setEvery(event.target.value),
+          },
+          h('option', { value: '' }, COPY.iDefault),
+          h('option', { value: '1' }, COPY.iDay),
+          h('option', { value: '7' }, COPY.iWeek),
+          h('option', { value: '30' }, COPY.iMonth),
+        ),
+        h('button', { className: 'dwl-btn', disabled: busy || !draft.trim(), onClick: submit }, COPY.add),
+      )
+    }
+
+    /** Topic cards: name, keywords, last run, per-topic interval, remove. */
+    function TopicCards({ state, busy, run }) {
+      if (!state.topics.length) return h('div', { className: 'dwlp-empty' }, COPY.empty)
+      return h(
+        'div',
+        { className: 'dwlp-topics' },
+        state.topics.map((topic) =>
+          h(
+            'div',
+            { key: topic.id, className: 'dwlp-topic' },
+            h('div', { className: 'dwlp-topic-name' }, topic.topic),
+            topic.keywords && topic.keywords.length ? h('div', { className: 'dwl-meta' }, topic.keywords.join(' · ')) : null,
+            h(
+              'div',
+              { className: 'dwlp-topic-foot' },
+              h(
+                'span',
+                { className: 'dwl-meta' },
+                `${COPY.lastRun} ${topic.lastCheckedAt ? fmt(topic.lastCheckedAt) : COPY.never}`,
+              ),
+              h(
+                'select',
+                {
+                  className: 'dwl-input dwlp-mini',
+                  value: topic.everyDays ? String(topic.everyDays) : '',
+                  disabled: busy,
+                  title: COPY.interval,
+                  onChange: (event) =>
+                    run('update-topic', {
+                      target: topic.id,
+                      everyDays: event.target.value ? Number(event.target.value) : 0,
+                    }),
+                },
+                h('option', { value: '' }, COPY.iDefault),
+                h('option', { value: '1' }, COPY.iDay),
+                h('option', { value: '7' }, COPY.iWeek),
+                h('option', { value: '30' }, COPY.iMonth),
+              ),
+              h('button', { className: 'dwlp-icon-btn', disabled: busy, onClick: () => run('remove', { target: topic.id }) }, COPY.remove),
+            ),
+          ),
+        ),
+      )
+    }
+
+    /** Reports grouped by day file; one entry per topic, clicking opens the reader. */
+    function HistorySection({ state }) {
+      const groups = groupRunsByFile((state && state.runs) || [])
+      if (!groups.length) return h('div', { className: 'dwlp-empty' }, COPY.noDigest)
+      return h(
+        'div',
+        { className: 'dwlp-history' },
+        groups.map((group) =>
+          h(
+            'div',
+            { key: group.key, className: 'dwlp-day' },
+            h(
+              'div',
+              { className: 'dwlp-dayhead' },
+              h('strong', null, group.day),
+              h(
+                'span',
+                { className: 'dwl-meta' },
+                `${group.runs.length}${zh() ? ' 次巡检' : group.runs.length === 1 ? ' run' : ' runs'} · ${group.entries}${zh() ? ' 条' : ''}`,
+              ),
+            ),
+            group.runs.flatMap((runRecord) =>
+              runRecord.entries.map((entry, index) =>
+                h(
+                  'button',
+                  {
+                    key: `${runRecord.id}-${entry.at}-${index}`,
+                    className: 'dwlp-entry',
+                    onClick: () =>
+                      openReader({ runId: runRecord.id, path: runRecord.path, from: runRecord.from, to: runRecord.to }),
+                  },
+                  h('div', null, entry.topic),
+                  h('div', { className: 'dwl-meta' }, entry.summary),
+                ),
+              ),
+            ),
+          ),
+        ),
+      )
+    }
+
+    /** Settings → Watchlist: the same controls in a plain scrolling section. */
+    function WatchlistPage() {
+      useLang()
+      const { state, error, busy, run } = useWatchlist()
+      const [notifyNotice, setNotifyNotice] = useState('')
+      if (!state) return h('div', { className: 'dwl' }, h(StyleTag), error || COPY.loading)
+
+      const settings = state.settings || {}
+      const schedule = state.schedule || {}
+      const patchSettings = (patch) => run('settings', { patch })
+
+      return h(
+        'div',
+        { className: 'dwl' },
+        h(StyleTag),
+        h(ErrorLine, { text: error }),
+
+        h(
+          'div',
+          { className: 'dwl-meta' },
+          `${COPY.dataDir}：${state.dataDir} · ${state.topics.length} ${zh() ? '个主题' : 'topics'}`,
+        ),
+
+        h('h3', null, COPY.topics),
+        h(AddTopicBar, { busy, onAdd: (topic, every) => run('add', { topic, everyDays: every ? Number(every) : undefined }) }),
+        state.topics.length
+          ? state.topics.map((topic) =>
+              h(TopicRow, {
+                key: topic.id,
+                topic,
+                busy,
+                onRemove: (item) => run('remove', { target: item.id }),
+                onSetInterval: (item, value) =>
+                  run('update-topic', { target: item.id, everyDays: value ? Number(value) : 0 }),
+              }),
+            )
+          : h('div', { className: 'dwl-empty' }, COPY.empty),
+
+        h('h3', null, COPY.defaultSettings),
+        h('div', { className: 'dwl-meta', style: { marginBottom: 4 } }, COPY.defaultHint),
+        h(ScheduleFields, { settings, schedule, busy, patchSettings, run }),
+
+        h('h3', null, COPY.push),
+        h(PushFields, { settings, state, patchSettings, notifyNotice, setNotifyNotice }),
+
+        h('h3', null, COPY.language),
+        h(LanguageFields, { settings, patchSettings }),
+      )
+    }
+
+    /** The sidebar panel: the whole watchlist in one page, selected from the nav list. */
+    function WatchlistPanel() {
+      useLang()
+      const { state, error, busy, run, reload } = useWatchlist()
+      const [notifyNotice, setNotifyNotice] = useState('')
+      // Opening the page is reading the list: clear the count the nav dot shows.
+      useEffect(() => {
+        if (!state || !state.unread) return
+        act('seen').then(() => reload())
+      }, [state])
+
+      const settings = (state && state.settings) || {}
+      const schedule = (state && state.schedule) || {}
+      const patchSettings = (patch) => run('settings', { patch })
+      const unread = (state && state.unread) || 0
+
+      return h(
+        'div',
+        { className: 'dwl dwlp' },
         h(StyleTag),
         h(
-          'svg',
-          { width: 16, height: 16, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 1.8 },
-          h('circle', { cx: 12, cy: 12, r: 8.5 }),
-          h('circle', { cx: 12, cy: 12, r: 4 }),
-          h('circle', { cx: 12, cy: 12, r: 1, fill: 'currentColor', stroke: 'none' }),
+          'div',
+          { className: 'dwlp-head' },
+          h(
+            'div',
+            { style: { minWidth: 0 } },
+            h('div', { className: 'dwlp-eyebrow' }, COPY.nav),
+            h('div', { className: 'dwlp-title' }, COPY.title),
+            h('div', { className: 'dwlp-sub' }, COPY.subtitle),
+          ),
+          h(
+            'div',
+            { className: 'dwlp-head-actions' },
+            unread ? h('span', { className: 'dwlp-chip' }, `${unread} ${COPY.unread}`) : null,
+            h('button', { className: 'dwl-btn dwlp-primary', disabled: busy, onClick: () => run('run') }, COPY.runNow),
+          ),
         ),
-        wide ? h('span', null, COPY.nav) : null,
-        unread > 0
-          ? h('span', { className: 'dwl-badge', title: `${unread} ${zh() ? '条未读' : 'unread'}` }, unread > 99 ? '99+' : String(unread))
-          : null,
+        h(
+          'div',
+          { className: 'dwlp-scroll' },
+          h(
+            'div',
+            { className: 'dwlp-inner' },
+            h(ErrorLine, { text: error }),
+            !state
+              ? h('div', { className: 'dwlp-empty' }, COPY.loading)
+              : [
+                  h(
+                    'section',
+                    { key: 'topics', className: 'dwlp-card' },
+                    h(
+                      'div',
+                      { className: 'dwlp-cardhead' },
+                      h('h2', null, COPY.topics),
+                      h(
+                        'span',
+                        { className: 'dwl-meta' },
+                        `${state.topics.length} ${zh() ? '个主题' : 'topics'} · ${state.dataDir}`,
+                      ),
+                    ),
+                    h(AddTopicBar, {
+                      busy,
+                      onAdd: (topic, every) =>
+                        run('add', { topic, everyDays: every ? Number(every) : undefined }),
+                    }),
+                    h(TopicCards, { state, busy, run }),
+                  ),
+                  h(
+                    'section',
+                    { key: 'schedule', className: 'dwlp-card' },
+                    h(
+                      'div',
+                      { className: 'dwlp-cardhead' },
+                      h('h2', null, COPY.defaultSettings),
+                      h('span', { className: 'dwl-meta' }, COPY.defaultHint),
+                    ),
+                    h(ScheduleFields, { settings, schedule, busy, patchSettings, run }),
+                  ),
+                  h(
+                    'section',
+                    { key: 'push', className: 'dwlp-card' },
+                    h('div', { className: 'dwlp-cardhead' }, h('h2', null, COPY.push)),
+                    h(PushFields, { settings, state, patchSettings, notifyNotice, setNotifyNotice }),
+                  ),
+                  h(
+                    'section',
+                    { key: 'language', className: 'dwlp-card' },
+                    h('div', { className: 'dwlp-cardhead' }, h('h2', null, COPY.language)),
+                    h(LanguageFields, { settings, patchSettings }),
+                  ),
+                  h(
+                    'section',
+                    { key: 'history', className: 'dwlp-card' },
+                    h(
+                      'div',
+                      { className: 'dwlp-cardhead' },
+                      h('h2', null, COPY.digests),
+                      h('span', { className: 'dwl-meta' }, COPY.entryHint),
+                    ),
+                    h(HistorySection, { state }),
+                  ),
+                ],
+          ),
+        ),
+      )
+    }
+
+    /** Nav mark: the sidebar owns the row, label and selected state; this is only the glyph. */
+    function WatchlistNavIcon(props) {
+      const { unread } = useUiState()
+      const size = (props && props.size) || 16
+      return h(
+        'span',
+        { className: 'dwlp-glyph' },
+        h(
+          'svg',
+          {
+            width: size,
+            height: size,
+            viewBox: '0 0 24 24',
+            fill: 'none',
+            stroke: 'currentColor',
+            strokeWidth: 1.7,
+            'aria-hidden': 'true',
+          },
+          h('circle', { cx: 12, cy: 12, r: 8.4 }),
+          h('circle', { cx: 12, cy: 12, r: 4 }),
+          h('circle', { cx: 12, cy: 12, r: 1.1, fill: 'currentColor', stroke: 'none' }),
+        ),
+        unread > 0 ? h('span', { className: 'dwlp-dot' }) : null,
       )
     }
 
@@ -966,53 +1179,6 @@ window.__ModuleLoader__.load({
       return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`
     }
 
-    function Panel({ state, onClose }) {
-      const runs = (state && state.runs) || []
-      const latest = runs[0]
-      const shown = latest ? latest.entries.slice(0, 3) : []
-      const total = runs.reduce((sum, run) => sum + run.entries.length, 0)
-      return [
-        h('div', { key: 'backdrop', className: 'dwl-popbackdrop', onClick: onClose }),
-        h(
-        'div',
-        { key: 'card', className: 'dwl dwl-overlay', role: 'dialog', 'aria-label': COPY.title },
-        h(StyleTag),
-        h(
-          'div',
-          { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 } },
-          h('h4', { style: { margin: 0 } }, COPY.title),
-          h('button', { className: 'dwl-btn', onClick: onClose }, COPY.close),
-        ),
-        latest
-          ? h(
-              'div',
-              { style: { marginBottom: 8 } },
-              h('div', { className: 'dwl-meta', style: { margin: '2px 0 4px' } }, `${fmt(latest.startedAt)} · ${latest.entries.length}${zh() ? ' 条' : ''}`),
-              shown.map((entry, index) =>
-                h(
-                  'button',
-                  {
-                    key: `${entry.at}-${index}`,
-                    className: 'dwl-entry',
-                    onClick: () => openReader({ runId: latest.id, path: latest.path, from: latest.from, to: latest.to }, 'panel'),
-                  },
-                  h('div', null, entry.topic),
-                  h('div', { className: 'dwl-meta' }, entry.summary),
-                ),
-              ),
-            )
-          : h('div', { className: 'dwl-empty' }, COPY.noDigest),
-        h('div', { className: 'dwl-sep' }),
-        h(
-          'div',
-          { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 } },
-          h('span', { className: 'dwl-meta' }, `${COPY.entryHint}${total ? ` · ${total}` : ''}`),
-          h('button', { className: 'dwl-btn', onClick: () => openAll() }, `${COPY.viewAll}${total ? `（${total}）` : ''}`),
-        ),
-        ),
-      ]
-    }
-
     /** Runs grouped by their report file: one file per day, so one block per file.
      *  Older records have no `file`; each of them is its own block. */
     function groupRunsByFile(runs) {
@@ -1039,87 +1205,7 @@ window.__ModuleLoader__.load({
       })
     }
 
-    function AllRuns({ state }) {
-      const runs = (state && state.runs) || []
-      const groups = groupRunsByFile(runs)
-      return [
-        h('div', { key: 'backdrop', className: 'dwl-backdrop', onClick: closeEverything }),
-        h(
-          'div',
-          { key: 'card', className: 'dwl dwl-reader', role: 'dialog', 'aria-label': COPY.allTitle },
-          h(StyleTag),
-          h(
-            'div',
-            { className: 'dwl-reader-head' },
-            h(
-              'div',
-              { style: { display: 'flex', gap: 8, alignItems: 'center' } },
-              h('button', { className: 'dwl-btn dwl-back', onClick: closeAll, title: COPY.back }, `← ${COPY.back}`),
-              h('div', { style: { fontWeight: 600 } }, COPY.allTitle),
-            ),
-            h('div', { style: { display: 'flex', gap: 8 } }, h('button', { className: 'dwl-btn', onClick: closeEverything }, COPY.closeAll)),
-          ),
-          h(
-            'div',
-            { className: 'dwl-reader-body' },
-            groups.length
-              ? groups.map((group) =>
-                  h(
-                    'div',
-                    { key: group.key, style: { marginBottom: 16 } },
-                    h(
-                      'button',
-                      {
-                        className: 'dwl-entry',
-                        style: { width: '100%' },
-                        onClick: () =>
-                          openReader(
-                            { runId: group.runs[0].id, path: group.path, from: group.runs[group.runs.length - 1].from, to: group.runs[0].to },
-                            'all',
-                          ),
-                      },
-                      h('div', { style: { fontWeight: 600 } }, group.day),
-                      h(
-                        'div',
-                        { className: 'dwl-meta' },
-                        `${group.runs.length}${zh() ? ' 次巡检' : group.runs.length === 1 ? ' run' : ' runs'} · ${group.entries}${zh() ? ' 条' : ''}`,
-                      ),
-                    ),
-                    group.runs.map((run) =>
-                      h(
-                        'div',
-                        { key: run.id, style: { marginTop: 6 } },
-                        // With one run per file the day header is enough; a shared day
-                        // file needs the run time to separate its sections.
-                        group.runs.length > 1
-                          ? h(
-                              'div',
-                              { className: 'dwl-meta', style: { marginBottom: 2 } },
-                              `${fmt(run.startedAt)}${run.seq ? (zh() ? ` · 第 ${run.seq} 次` : ` · run ${run.seq}`) : ''}`,
-                            )
-                          : null,
-                        run.entries.map((entry, index) =>
-                          h(
-                            'button',
-                            {
-                              key: `${entry.at}-${index}`,
-                              className: 'dwl-entry',
-                              onClick: () => openReader({ runId: run.id, path: run.path, from: run.from, to: run.to }, 'all'),
-                            },
-                            h('div', null, entry.topic),
-                            h('div', { className: 'dwl-meta' }, entry.summary),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                )
-              : h('div', { className: 'dwl-empty' }, COPY.noDigest),
-          ),
-        ),
-      ]
-    }
-
+    /** One report: the day file's own Markdown, a shortcut to the right sidebar, and the file itself. */
     function Reader({ view }) {
       const [text, setText] = useState('')
       const [error, setError] = useState('')
@@ -1142,75 +1228,86 @@ window.__ModuleLoader__.load({
         }
       }, [view.runId])
       return [
-        h('div', { key: 'backdrop', className: 'dwl-backdrop', onClick: closeEverything }),
-        h(
-        'div',
-        { key: 'card', className: 'dwl dwl-reader', role: 'dialog', 'aria-label': COPY.title },
-        h(StyleTag),
+        h('div', { key: 'backdrop', className: 'dwl-backdrop', onClick: closeReader }),
         h(
           'div',
-          { className: 'dwl-reader-head' },
+          { key: 'card', className: 'dwl dwl-reader', role: 'dialog', 'aria-label': COPY.title },
+          h(StyleTag),
           h(
             'div',
-            { style: { minWidth: 0, display: 'flex', gap: 8, alignItems: 'flex-start' } },
-            h('button', { className: 'dwl-btn dwl-back', onClick: closeReader, title: COPY.back }, `← ${COPY.back}`),
+            { className: 'dwl-reader-head' },
             h(
               'div',
               { style: { minWidth: 0 } },
-              h('div', { style: { fontWeight: 600 } }, `${COPY.title} · ${fmt(view.from || view.startedAt)} → ${fmt(view.to)}`),
+              h(
+                'div',
+                { style: { fontWeight: 600 } },
+                `${COPY.title} · ${fmt(view.from || view.startedAt)} → ${fmt(view.to)}`,
+              ),
               h('div', { className: 'dwl-src' }, view.path || ''),
             ),
+            h(
+              'div',
+              { style: { display: 'flex', gap: 8, flexShrink: 0 } },
+              h(
+                'button',
+                {
+                  className: 'dwl-btn',
+                  onClick: () => {
+                    const result = openDigestTab(view.runId)
+                    if (result === 'ok') closeReader()
+                    else setNotice(`${zh() ? '打开失败' : 'Failed'}：${result}`)
+                  },
+                },
+                COPY.openSidebar,
+              ),
+              h('button', { className: 'dwl-btn', onClick: () => act('open', { runId: view.runId }) }, COPY.openFile),
+              h('button', { className: 'dwl-btn', onClick: closeReader }, COPY.close),
+            ),
           ),
+          notice ? h('div', { className: 'dwl-meta', style: { padding: '8px 14px 0' } }, notice) : null,
           h(
             'div',
-            { style: { display: 'flex', gap: 8, flexShrink: 0 } },
-            h(
-              'button',
-              {
-                className: 'dwl-btn',
-                onClick: () => {
-                  const result = openDigestTab(view.runId)
-                  if (result === 'ok') closeReader()
-                  else setNotice(`${zh() ? '打开失败' : 'Failed'}：${result}`)
-                },
-              },
-              COPY.openSidebar,
-            ),
-            h('button', { className: 'dwl-btn', onClick: () => act('open', { runId: view.runId }) }, COPY.openFile),
-            h('button', { className: 'dwl-btn', onClick: closeEverything }, COPY.closeAll),
+            { className: 'dwl-reader-body' },
+            error
+              ? h('div', { className: 'dwl-err' }, error)
+              : text
+                ? h(Markdown, { text })
+                : h('div', { className: 'dwl-meta' }, COPY.loading),
           ),
         ),
-        notice ? h('div', { className: 'dwl-meta', style: { padding: '8px 14px 0' } }, notice) : null,
-        h(
-          'div',
-          { className: 'dwl-reader-body' },
-          error ? h('div', { className: 'dwl-err' }, error) : text ? h(Markdown, { text }) : h('div', { className: 'dwl-meta' }, COPY.loading),
-        ),
-      ),
       ]
     }
 
+    /**
+     * Always-mounted overlay: it owns the reader, the unread count the nav dot
+     * shows, the 60-second poll that lets a run notify while another panel is
+     * open, and Escape handling. It renders nothing until a report is opened.
+     */
     function Overlay() {
       useLang()
-      const { open, all, reader } = useUiState()
+      const { reader } = useUiState()
       const { state, reload } = useWatchlist()
+      useRunNotifier(state)
       useEffect(() => {
-        if (!open && !reader && !all) return undefined
+        setUnread((state && state.unread) || 0)
+      }, [state])
+      useEffect(() => {
+        const timer = setInterval(reload, 60000)
+        return () => clearInterval(timer)
+      }, [reload])
+      useEffect(() => {
+        if (!reader) return undefined
         reload()
-        if (open && !reader) act('seen').then(() => { bumpData(); reload() })
+        act('seen').then(() => reload())
         const onKey = (event) => {
-          if (event.key !== 'Escape') return
-          if (reader) closeReader()
-          else if (all) closeAll()
-          else setOpen(false)
+          if (event.key === 'Escape') closeReader()
         }
         window.addEventListener('keydown', onKey)
         return () => window.removeEventListener('keydown', onKey)
-      }, [open, all, reader, reload])
-      if (reader) return h(Reader, { view: reader })
-      if (all) return h(AllRuns, { state })
-      if (!open) return null
-      return h(Panel, { state, onClose: () => setOpen(false) })
+      }, [reader, reload])
+      if (!reader) return null
+      return h(Reader, { view: reader })
     }
 
     return {
@@ -1230,10 +1327,15 @@ window.__ModuleLoader__.load({
             WatchlistPage,
           ),
         )
-        ctx.slots.inject('sidebar.footer.action', () =>
+        // The page must exist before the sidebar row can select it: the sidebar
+        // lists a panel only while a `main` entry carries the same key.
+        ctx.slots.inject('main', () =>
+          ctx.slots.register({ name: 'main', key: 'watchlist' }, WatchlistPanel),
+        )
+        ctx.slots.inject('sidebar.panellist', () =>
           ctx.slots.register(
-            { name: 'sidebar.footer.action', id: 'watchlist-footer', order: 20, label: () => COPY.nav },
-            FooterAction,
+            { name: 'sidebar.panellist', id: 'watchlist', order: 20, label: () => COPY.nav },
+            WatchlistNavIcon,
           ),
         )
         ctx.slots.inject('shell.overlay', () =>

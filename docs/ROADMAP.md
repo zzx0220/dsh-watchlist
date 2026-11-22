@@ -44,6 +44,12 @@ concrete spec. Do not implement a guessed design before that.
    (`.dwl-reader-body`) and the right-sidebar report tab (inline padding `10px 14px`) feed
    the same component, so any fix has to look right in both widths.
 
+**Progress (2026-11-22)** — the structural half is done on branch `ui/sidebar-panel`:
+the footer entry is gone, the plugin registers a `sidebar.panellist` row beside
+Plugins and Automation, and a keyed `main` page shows the whole list in the centre
+column (topics, schedule, push, language, report history). Still open: the final
+visual design of the row, the page, and the report Markdown renderer.
+
 ---
 
 ## 已知待办
@@ -85,3 +91,8 @@ concrete spec. Do not implement a guessed design before that.
    分隔线、嵌套列表，也没有第三级标题，更没有阅读栏宽。应用内阅读器正文
    （`.dwl-reader-body`）和右侧栏报告标签页（内联 `10px 14px` 边距）共用同一个组件，
    所以改法要同时照顾这两种宽度下的观感。
+
+**进展（2026-11-22）**——结构部分已在 `ui/sidebar-panel` 分支完成：左下角入口已移除，
+改为 `sidebar.panellist` 的一行，与「插件」「自动化任务」并列；并注册了一个 keyed
+`main` 页面，在中间列整页显示全部内容（主题、调度、推送、语言、报告历史）。仍未完成：
+该行、整页和报告 Markdown 渲染器的最终视觉设计。

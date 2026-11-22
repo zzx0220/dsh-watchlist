@@ -1,23 +1,62 @@
 #!/usr/bin/env node
 /**
  * Client-half self-check (no Harness required):
- *   1. run client.js against a stub React, confirming injection and the four
- *      slot registrations;
+ *   1. run client.js against a stub React, confirming injection and the exact
+ *      set of slot registrations (the nav entry is a `sidebar.panellist` row
+ *      with a matching `main` page, not a `sidebar.footer.action`);
  *   2. simulate a DSH language switch, confirming labels follow locale.active;
- *   3. render four components recursively (panel / all / reader / footer /
- *      settings / tab), which catches “a deleted helper blows up at render
- *      time with ReferenceError” — exactly how the previous version broke.
+ *   3. render every registered component, leaving stateful components three
+ *      passes so a resolved state is reached, which catches "a deleted helper
+ *      blows up at render time with ReferenceError" and keeps the loading
+ *      branch from being the only one exercised.
  * Usage: node scripts/client-check.mjs
  */
 import fs from 'node:fs'
 import vm from 'node:vm'
+
+/** The `/state` payload every render below starts from. */
+const STATE = {
+  ok: true,
+  dataDir: '/tmp/watchlist',
+  unread: 2,
+  topics: [
+    { id: 't1', topic: '主题A', keywords: ['关键词'], everyDays: 1, lastCheckedAt: '2026-11-21T08:30:00Z' },
+    { id: 't2', topic: '主题B', keywords: [], everyDays: 0, lastCheckedAt: null },
+  ],
+  settings: {
+    schedule: { enabled: true, frequency: 'daily', time: '08:30' },
+    lookbackDays: 7,
+    maxTopicsPerRun: 8,
+    push: { channels: ['session', 'macos'] },
+    locale: 'auto',
+  },
+  schedule: { timing: '2026-11-23 08:30', task: { status: 'active' } },
+  runs: [
+    {
+      id: 'run-20261122T141848Z',
+      path: '/tmp/report.md',
+      from: '2026-11-17T00:00:00Z',
+      to: '2026-11-22T00:00:00Z',
+      startedAt: '2026-11-22T14:18:48Z',
+      day: '2026-11-22',
+      entries: [
+        { at: '2026-11-22T14:18:48Z', topic: '主题A', summary: '摘要', hasUpdate: true, sources: ['来源 - https://example.com'] },
+      ],
+    },
+  ],
+}
 
 const src = fs.readFileSync(new URL('../client.js', import.meta.url), 'utf8')
 let def
 const sandbox = {
   window: { __ModuleLoader__: { load: (d) => { def = d } }, addEventListener() {}, removeEventListener() {} },
   navigator: { language: 'zh-CN' },
-  fetch: async () => ({ json: async () => ({ ok: true, text: '# 报告\n\n## 主题\n\n- 状态：有实质进展' }) }),
+  fetch: async (url) => ({
+    json: async () =>
+      String(url).endsWith('/action')
+        ? { ok: true, text: '# 报告\n\n## 主题\n\n- 状态：有实质进展\n- 来源：https://example.com' }
+        : STATE,
+  }),
   setInterval: () => 0,
   clearInterval() {},
   setTimeout: () => 0,
@@ -26,10 +65,26 @@ const sandbox = {
 vm.createContext(sandbox)
 vm.runInContext(src, sandbox)
 
+/* ---------- Stub React: a stateful harness for the top level, a stateless one for children ---------- */
+let hookMode = 'stateless'
+let cells = []
+let cellCursor = 0
+let pendingEffects = []
+
 const React = {
   createElement: (type, props, ...children) => ({ type, props: props || {}, children }),
-  useState: (init) => [typeof init === 'function' ? init() : init, () => {}],
+  useState: (init) => {
+    if (hookMode !== 'harness') return [typeof init === 'function' ? init() : init, () => {}]
+    const index = cellCursor++
+    if (!cells[index]) cells[index] = { value: typeof init === 'function' ? init() : init }
+    const cell = cells[index]
+    return [cell.value, (next) => { cell.value = typeof next === 'function' ? next(cell.value) : next }]
+  },
   useEffect: (fn) => {
+    if (hookMode === 'harness') {
+      pendingEffects.push(fn)
+      return
+    }
     try {
       const cleanup = fn()
       if (typeof cleanup === 'function') cleanup()
@@ -68,7 +123,7 @@ const ctx = {
   const used = new Set([...src.matchAll(/COPY\.([A-Za-z0-9_]+)/g)].map((m) => m[1]))
   used.delete('xxx') // the example inside a comment
   const zh = src.slice(src.indexOf('      zh: {'), src.indexOf('      en: {'))
-  const en = src.slice(src.indexOf('      en: {'), src.indexOf('    }\n\n    // 用 Proxy'))
+  const en = src.slice(src.indexOf('      en: {'), src.indexOf('    }\n\n    // A Proxy'))
   const keysOf = (block) => new Set([...block.matchAll(/^\s{8}([A-Za-z0-9_]+):/gm)].map((m) => m[1]))
   const zhKeys = keysOf(zh)
   const enKeys = keysOf(en)
@@ -82,6 +137,20 @@ console.log('inject:', mod.inject.join(','))
 mod.apply(ctx)
 console.log('registered:', registered.map((item) => item.name).join(' | '))
 
+const EXPECTED = [
+  'settings.section#watchlist',
+  'main#watchlist',
+  'sidebar.panellist#watchlist',
+  'shell.overlay#watchlist-overlay',
+  'sidebar.right.pane.tab#dsh-watchlist/digest',
+]
+let failures = 0
+const actual = registered.map((item) => `${item.name}#${item.key || item.id}`)
+const surplus = actual.filter((key) => !EXPECTED.includes(key))
+const absent = EXPECTED.filter((key) => !actual.includes(key))
+console.log('registrations:', surplus.length || absent.length ? `missing=${absent} unexpected=${surplus}` : 'exactly as expected')
+if (surplus.length || absent.length) failures += 1
+
 const labels = registered.filter((item) => typeof item.label === 'function')
 console.log('labels(en):', labels.map((item) => item.label()).join(' / '))
 active = 'zh'
@@ -92,64 +161,102 @@ for (const fn of subs) fn()
 console.log('labels(ja):', labels.map((item) => item.label()).join(' / '))
 
 const badText = []
-function walk(node, depth) {
-  if (depth > 12 || node == null) return
+
+/** Render one component over a few passes so asynchronously loaded state is reached. */
+async function renderComponent(Component, props) {
+  hookMode = 'harness'
+  cells = []
+  let tree
+  for (let pass = 0; pass < 3; pass += 1) {
+    cellCursor = 0
+    pendingEffects = []
+    tree = Component(props || {})
+    const cleanups = pendingEffects.map((fn) => {
+      try {
+        return fn()
+      } catch (error) {
+        console.log('EFFECT THROW:', error.message)
+        return undefined
+      }
+    })
+    await new Promise((resolve) => setTimeout(resolve, 5))
+    for (const cleanup of cleanups) {
+      if (typeof cleanup === 'function') {
+        try {
+          cleanup()
+        } catch {
+          /* listeners were already removed with the pass */
+        }
+      }
+    }
+  }
+  hookMode = 'stateless'
+  return resolveNode(tree, 0)
+}
+
+/** Replace every function child with what it renders, so children load state too. */
+async function resolveNode(node, depth) {
+  if (depth > 12 || node == null) return node
   if (typeof node === 'string') {
     if (node.includes('undefined')) badText.push(node)
-    return
+    return node
   }
   if (Array.isArray(node)) {
-    node.forEach((item) => walk(item, depth))
-    return
+    const out = []
+    for (const item of node) out.push(await resolveNode(item, depth))
+    return out
   }
-  if (typeof node !== 'object') return
-  const { type, props, children } = node
-  if (typeof type === 'function') {
-    let out
+  if (typeof node !== 'object') return node
+  if (typeof node.type === 'function') {
+    let inner
     try {
-      out = type(props || {})
+      inner = await renderComponent(node.type, node.props || {})
     } catch (error) {
-      throw new Error(`render threw in ${type.name || 'anonymous'}: ${error.message}`)
+      throw new Error(`render threw in ${node.type.name || 'anonymous'}: ${error.message}`)
     }
-    walk(out, depth + 1)
-    return
+    return resolveNode(inner, depth + 1)
   }
-  ;(children || []).forEach((child) => walk(child, depth))
+  const children = []
+  for (const child of node.children || []) children.push(await resolveNode(child, depth))
+  return { ...node, children }
 }
 
-const run = {
-  id: 'run-20261122T141848Z',
-  path: '/tmp/report.md',
-  from: '2026-11-17T00:00:00Z',
-  to: '2026-11-22T00:00:00Z',
-  startedAt: '2026-11-22T14:18:48Z',
-  entries: [{ at: '2026-11-22T14:18:48Z', topic: '主题A', summary: '摘要', sources: ['来源 - https://example.com'] }],
-}
-
-let failures = 0
-for (const [label, ui] of [
-  ['panel', { open: true, all: false, reader: null }],
-  ['all', { open: false, all: true, reader: null }],
-  ['reader', { open: false, all: false, reader: run }],
-]) {
-  sandbox.window.__dshWatchlistUi = { ...ui, backTo: 'panel', dataRev: 0, listeners: new Set() }
-  try {
-    walk(comps['shell.overlay#watchlist-overlay']({}), 0)
-    console.log(`render ${label}: ok`)
-  } catch (error) {
-    failures += 1
-    console.log(`render ${label}: FAIL ${error.message}`)
+/** Every string a resolved tree reaches. */
+function textOf(node, out = []) {
+  if (node == null) return out
+  if (typeof node === 'string') {
+    out.push(node)
+    return out
   }
+  if (Array.isArray(node)) {
+    node.forEach((item) => textOf(item, out))
+    return out
+  }
+  if (typeof node !== 'object') return out
+  ;(node.children || []).forEach((child) => textOf(child, out))
+  return out
 }
 
-for (const [label, key, props] of [
-  ['footer', 'sidebar.footer.action#watchlist-footer', { wide: true }],
-  ['settings', 'settings.section#watchlist', {}],
-  ['tab', 'sidebar.right.pane.tab#dsh-watchlist/digest', {}],
-]) {
+const run = STATE.runs[0]
+const tabProps = { useTabInfo: () => ({ tab: { navigation: { params: { runId: run.id } } } }) }
+active = 'en'
+for (const fn of subs) fn()
+const cases = [
+  ['main page', 'main#watchlist', {}, ['主题A', 'Default schedule', '2026-11-22']],
+  ['settings section', 'settings.section#watchlist', {}, ['主题A']],
+  ['nav icon', 'sidebar.panellist#watchlist', { size: 16, active: false }, []],
+  ['report tab', 'sidebar.right.pane.tab#dsh-watchlist/digest', tabProps, ['状态：有实质进展']],
+  ['reader', 'shell.overlay#watchlist-overlay', {}, ['状态：有实质进展']],
+]
+for (const [label, key, props, expected] of cases) {
+  // The reader case opens a report first; every other case renders nothing.
+  sandbox.window.__dshWatchlistUi = { reader: key.includes('overlay') ? run : null, unread: 2, listeners: new Set() }
   try {
-    walk(comps[key](props), 0)
-    console.log(`render ${label}: ok`)
+    const tree = await renderComponent(comps[key], props)
+    const joined = textOf(tree).join('\n')
+    const missing = expected.filter((text) => !joined.includes(text))
+    if (missing.length) throw new Error(`missing rendered text: ${JSON.stringify(missing)}`)
+    console.log(`render ${label}: ok${expected.length ? ` (state reached: ${expected.join(', ')})` : ''}`)
   } catch (error) {
     failures += 1
     console.log(`render ${label}: FAIL ${error.message}`)

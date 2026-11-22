@@ -18,6 +18,14 @@ progress, write it down, and push a summary.
    run by itself — only when the run has progress, only after the run stops being
    written to, and clicking it opens that run's report.
 
+## Where it shows up
+
+- A `关注清单` row in the left sidebar's panel list, beside Plugins and Automation.
+  Selecting it opens the plugin's own page in the centre column: topics, the
+  default schedule, push channels, interface language, and the report history.
+- Settings → Watchlist: the same controls inside the settings page.
+- The right sidebar's report tab, plus the in-app reader for a single report.
+
 ## Why it delegates
 
 Web search, summarization, and status are already owned by DeepSeek Harness.

@@ -24,7 +24,7 @@ Two rules keep it useful:
 | L0 | `lib/store.js` logic, client registration/render | 3 checks + 1 wrapper |
 | L1 | plugin loading, tool registration, HTTP API, client slots | 5 |
 | L2 | the 8 `watchlist_*` tools | 9 |
-| L3 | settings page, footer, panel, reader, right tab, notifications, language | 8 |
+| L3 | settings page, nav entry, main page, reader, right tab, notifications, language | 8 |
 | L4 | files on disk, report format, unread counting, path guards | 5 |
 | L5 | push channels (session / macOS / WeChat) | 3 |
 
@@ -96,10 +96,11 @@ topics and digests unchanged, settings unchanged, and the task's next fire time
 (`scheduledAt`) is unchanged. Its `updatedAt` may bump on reload because of 9.1 —
 that is the known defect, not a new one.
 
-**L1.4 All four client surfaces render.** Settings → Watchlist shows the page;
-the sidebar footer shows the ring icon and the `关注清单` label; clicking it opens
-the overlay card; the right sidebar can open the `关注清单` report tab. Any blank
-surface with a console `ReferenceError` fails L1.4 even if the others work.
+**L1.4 Every client surface renders.** Settings → Watchlist shows the page; the
+left sidebar lists `关注清单` beside `插件` / `自动化任务` and selecting it shows the
+full page in the centre column; the right sidebar can open the `关注清单` report
+tab; opening a report from that page shows the reader. Any blank surface with a
+console `ReferenceError` fails L1.4 even if the others work.
 
 **L1.5 Version.** Settings → Plugins shows `dsh-watchlist` at the version in
 `package.json` (`0.6.0`). A stale version after an edit means the profile link
@@ -252,29 +253,34 @@ change, wait for a poll or reopen the surface before judging it.
   back to `08:30`, so clear it, type the full `HH:MM`, then confirm
   `settings.json` and the `下次触发` line.
 
-### L3.2 Footer
+### L3.2 Sidebar entry (nav list)
 
-- Ring icon plus `关注清单`; unread badge shows the number (99+ above 99).
-- Click when closed → panel opens and unread is marked seen (badge clears).
-- Click again → closes. With the reader open, click steps back one layer instead
-  of toggling.
-- The badge must not reappear for the same entries after marking seen.
+- The entry sits in the left sidebar's panel list, beside `插件` and
+  `自动化任务` — not in the footer, and with the host's own row styling (glyph
+  plus label, selected background) rather than a custom button.
+- Collapsed sidebar: only the 16–18px glyph shows, with the same tooltip as the
+  other rows.
+- Unread dot on the glyph while entries are unread; it clears after the page or a
+  report is opened, and never reappears for the same entries.
+- Selecting the row shows the plugin's page in the centre column and marks the
+  row selected; it never opens a modal or a floating panel.
 
-### L3.3 Panel (latest run)
+### L3.3 Main page (the whole list)
 
-- Header: latest run time and entry count.
-- Up to 3 entries of the latest run, each with topic and summary; click → reader.
-- `查看全部（N）` opens L3.4; `点条目直接阅读` hint present.
-- Empty state: `还没有巡检记录。` when there are no runs.
-- Backdrop click and Esc close the panel.
-
-### L3.4 All runs
-
-- One block per report file (one file per day), header `YYYY-MM-DD` and
-  `N 次巡检 · M 条`.
-- A day with several runs shows each run's time and `第 N 次` before its entries.
-- Click an entry or the day header → reader for that file.
-- `← 返回` closes the list and reopens the panel; `关闭全部` closes everything.
+- Header: eyebrow label, title, one-line subtitle, `立即运行一次`, and an
+  `N 未读` chip while unread.
+- Topics card: add row (input + interval + 添加) and one card per topic with name,
+  keywords, `上次巡检 …`, its own interval select, and 删除.
+- Default-schedule card: 自动巡检, 频率/时间, 回溯天数/单轮上限, and the
+  `下次触发 …` line with task status.
+- Push card: session and macOS toggles (WeChat disabled), test-notification
+  button and its inline result.
+- Language card: 跟随 DSH / 中文 / English.
+- Reports card: one block per day file, header `YYYY-MM-DD` and `N 次巡检 · M 条`,
+  then one row per topic that opens the reader for that file. Empty state
+  `还没有巡检记录。`.
+- The page scrolls inside the centre column; the header stays put and nothing
+  overflows the column at 480px, 900px, and full width.
 
 ### L3.5 Reader
 
@@ -285,10 +291,10 @@ change, wait for a poll or reopen the surface before judging it.
   `### <topic>` line shows up literally as `### <topic>`; treat that as a known
   cosmetic gap and write a case here when it is fixed.
 - Links must open outside the app (system browser) and never replace the card.
-- Buttons: `在侧栏打开`, `外部打开` (macOS only; opens the day file with the
-  system editor), `关闭全部`.
-- `← 返回` and Esc step back to the surface it came from (all-runs → panel →
-  closed), never straight to nothing.
+- Buttons: `在侧栏打开`, `用外部程序打开` (macOS only; opens the day file with the
+  system editor), `关闭`.
+- Backdrop click and Esc close the reader and return to whatever was underneath
+  (the page, or the app itself when the notification opened it).
 - Delete the report file on disk and reopen: the reader shows an error line, not
   a blank card or a crash.
 
@@ -322,8 +328,8 @@ change, wait for a poll or reopen the surface before judging it.
   updates the plugin's labels without a restart (locale subscription).
 - `中文` and `English` pin the language and override DSH.
 - Any other DSH locale (`ja`, `fr`, …) shows English.
-- Switch both ways and check all six components: settings page, footer, panel,
-  all-runs, reader, tab title. A label left untranslated is a dictionary gap;
+- Switch both ways and check every surface: settings page, nav label, main page,
+  reader, tab title. A label left untranslated is a dictionary gap;
   `client-check.mjs` catches missing keys and undefined labels.
 
 ## 7. L4 — data layer
@@ -351,7 +357,8 @@ digests/
   `topic`, `hasUpdate`, `summary`, `sources`, `note`. Migrated legacy runs have
   `legacyFile` instead of `file` and resolve to their old `run-<stamp>.md`.
 - **Unread.** Unread = entries with `at` later than `state.lastSeenAt`; a fresh
-  install (no `lastSeenAt`) counts all entries. Opening the panel marks seen.
+  install (no `lastSeenAt`) counts all entries. Opening the main page or a report
+  marks seen.
 - **Guards.** `action: "read"` rejects a `runId` that is not
   `run-YYYYMMDDTHHMMSSZ(-N)`; `action: "open"` only accepts `.md` files under
   `<dataDir>/digests` and only on macOS; the whole API rejects non-loopback
@@ -408,7 +415,7 @@ For a quick "did the last edit break anything" check:
 1. L0.1, L0.2, L0.3.
 2. L1.1 (`watchlist_list`) and L1.2 (`curl` state).
 3. L3.1 (settings page renders, add/remove one `[test]` topic) and L3.2/L3.3
-   (panel opens, unread clears).
+   (nav row opens the page, the unread dot clears, the page scrolls).
 4. L2.5 + L2.6 with one test topic: brief, record, check the day file.
 5. L2.8 `sync` when the schedule settings changed.
 
@@ -419,7 +426,7 @@ For a quick "did the last edit break anything" check:
 | `watchlist_*` tools unknown | Host half not loaded | Plugins page, profile link, reload |
 | Settings page blank, console `ReferenceError` | client bundle broken | DevTools, `node --check client.js`, L0.2 |
 | Page says `加载失败` | API route not registered / Host error | `curl` state, Host logs |
-| Panel empty while files look fine | `runs.json` missing or stale | L4 index consistency, re-run a record |
+| Main page's reports card empty while files look fine | `runs.json` missing or stale | L4 index consistency, re-run a record |
 | Badge stuck at 0 | `lastSeenAt` newer than entries | L4 unread rule |
 | No notification | permission denied, channel off, no `hasUpdate`, >2 h old, already notified | L3.7 |
 | Notification click opens nothing | sidebar unavailable and reader fallback failed | L3.6, L3.5 |
