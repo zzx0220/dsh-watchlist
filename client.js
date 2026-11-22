@@ -195,7 +195,7 @@ window.__ModuleLoader__.load({
      * 模块级状态会让「footer 按钮」和「shell.overlay」各拿一份，点击永远没有回响。
      */
     function uiStore() {
-      if (!window.__dshWatchlistUi) window.__dshWatchlistUi = { open: false, reader: null, dataRev: 0, listeners: new Set() }
+      if (!window.__dshWatchlistUi) window.__dshWatchlistUi = { open: false, all: false, reader: null, dataRev: 0, listeners: new Set() }
       return window.__dshWatchlistUi
     }
     function bumpData() {
@@ -210,10 +210,21 @@ window.__ModuleLoader__.load({
       uiStore().open = value
       notifyUi()
     }
+    function openAll() {
+      const ui = uiStore()
+      ui.all = true
+      ui.open = false
+      notifyUi()
+    }
+    function closeAll() {
+      uiStore().all = false
+      notifyUi()
+    }
     function openReader(view) {
       const ui = uiStore()
       ui.reader = view
       ui.open = false
+      ui.all = false
       notifyUi()
     }
     function closeReader() {
@@ -229,7 +240,7 @@ window.__ModuleLoader__.load({
         return () => ui.listeners.delete(listener)
       }, [])
       const ui = uiStore()
-      return { open: ui.open, reader: ui.reader, dataRev: ui.dataRev }
+      return { open: ui.open, all: ui.all, reader: ui.reader, dataRev: ui.dataRev }
     }
 
     function useWatchlist() {
@@ -719,7 +730,9 @@ window.__ModuleLoader__.load({
 
     function Panel({ state, onClose }) {
       const runs = (state && state.runs) || []
-      const fallback = (state && state.openSessionId) || (state && state.schedule && state.schedule.task && state.schedule.task.sessionId)
+      const latest = runs[0]
+      const shown = latest ? latest.entries.slice(0, 3) : []
+      const total = runs.reduce((sum, run) => sum + run.entries.length, 0)
       return h(
         'div',
         { className: 'dwl dwl-overlay', role: 'dialog', 'aria-label': COPY.title },
@@ -730,33 +743,72 @@ window.__ModuleLoader__.load({
           h('h4', { style: { margin: 0 } }, COPY.title),
           h('button', { className: 'dwl-btn', onClick: onClose }, COPY.close),
         ),
-        runs.length
-          ? runs.slice(0, 3).map((run) =>
-              h(
-                'div',
-                { key: run.id, style: { marginBottom: 10 } },
+        latest
+          ? h(
+              'div',
+              { style: { marginBottom: 8 } },
+              h('div', { className: 'dwl-meta', style: { margin: '2px 0 4px' } }, `${fmt(latest.startedAt)} · ${latest.entries.length}${zh() ? ' 条' : ''}`),
+              shown.map((entry, index) =>
                 h(
-                  'div',
-                  { className: 'dwl-meta', style: { margin: '2px 0 4px' } },
-                  `${fmt(run.startedAt)} · ${run.entries.length}${zh() ? ' 条' : ''}`,
-                ),
-                run.entries.slice(0, 5).map((entry, index) =>
-                  h(
-                    'button',
-                    {
-                      key: `${entry.at}-${index}`,
-                      className: 'dwl-entry',
-                      onClick: () => openReader({ runId: run.id, path: run.path, from: run.from, to: run.to, fallback }),
-                    },
-                    h('div', null, entry.topic),
-                    h('div', { className: 'dwl-meta' }, entry.summary),
-                  ),
+                  'button',
+                  {
+                    key: `${entry.at}-${index}`,
+                    className: 'dwl-entry',
+                    onClick: () => openReader({ runId: latest.id, path: latest.path, from: latest.from, to: latest.to }),
+                  },
+                  h('div', null, entry.topic),
+                  h('div', { className: 'dwl-meta' }, entry.summary),
                 ),
               ),
             )
           : h('div', { className: 'dwl-empty' }, COPY.noDigest),
         h('div', { className: 'dwl-sep' }),
-        h('div', { className: 'dwl-meta' }, COPY.entryHint),
+        h(
+          'div',
+          { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 } },
+          h('span', { className: 'dwl-meta' }, `${COPY.entryHint}${total ? ` · ${total}` : ''}`),
+          h('button', { className: 'dwl-btn', onClick: () => openAll() }, `${COPY.viewAll}${total ? `（${total}）` : ''}`),
+        ),
+      )
+    }
+
+    function AllRuns({ state, onClose }) {
+      const runs = (state && state.runs) || []
+      return h(
+        'div',
+        { className: 'dwl dwl-reader', role: 'dialog', 'aria-label': COPY.allTitle },
+        h(StyleTag),
+        h(
+          'div',
+          { className: 'dwl-reader-head' },
+          h('div', { style: { fontWeight: 600 } }, COPY.allTitle),
+          h('div', { style: { display: 'flex', gap: 8 } }, h('button', { className: 'dwl-btn', onClick: onClose }, COPY.close)),
+        ),
+        h(
+          'div',
+          { className: 'dwl-reader-body' },
+          runs.length
+            ? runs.map((run) =>
+                h(
+                  'div',
+                  { key: run.id, style: { marginBottom: 14 } },
+                  h('div', { className: 'dwl-meta', style: { marginBottom: 4 } }, `${fmt(run.startedAt)} · ${run.entries.length}${zh() ? ' 条' : ''}`),
+                  run.entries.map((entry, index) =>
+                    h(
+                      'button',
+                      {
+                        key: `${entry.at}-${index}`,
+                        className: 'dwl-entry',
+                        onClick: () => openReader({ runId: run.id, path: run.path, from: run.from, to: run.to }),
+                      },
+                      h('div', null, entry.topic),
+                      h('div', { className: 'dwl-meta' }, entry.summary),
+                    ),
+                  ),
+                ),
+              )
+            : h('div', { className: 'dwl-empty' }, COPY.noDigest),
+        ),
       )
     }
 
@@ -824,21 +876,23 @@ window.__ModuleLoader__.load({
 
     function Overlay() {
       useLang()
-      const { open, reader } = useUiState()
+      const { open, all, reader } = useUiState()
       const { state, reload } = useWatchlist()
       useEffect(() => {
-        if (!open && !reader) return undefined
+        if (!open && !reader && !all) return undefined
         reload()
         if (open && !reader) act('seen').then(() => { bumpData(); reload() })
         const onKey = (event) => {
           if (event.key !== 'Escape') return
           if (reader) closeReader()
+          else if (all) closeAll()
           else setOpen(false)
         }
         window.addEventListener('keydown', onKey)
         return () => window.removeEventListener('keydown', onKey)
-      }, [open, reader, reload])
+      }, [open, all, reader, reload])
       if (reader) return h(Reader, { view: reader })
+      if (all) return h(AllRuns, { state, onClose: () => closeAll() })
       if (!open) return null
       return h(Panel, { state, onClose: () => setOpen(false) })
     }

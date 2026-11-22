@@ -73,6 +73,13 @@ initial value, runtime changes win and survive upgrades.
     └── run-20261122T140500Z.md
 ```
 
+## Cadence
+
+- `schedule.frequency` is both the scheduler tick and the **default interval for new topics** (daily = 1, weekly = 7, monthly = 30 days).
+- Each topic can override it: `watchlist_add({ topic: "...", everyDays: 3 })`.
+- A run only picks **due** topics; the report stays one-per-run and contains only that run's entries.
+- When nothing is due, the run is skipped and no empty report is written.
+
 ## Limitations
 
 - **The Host must be running**: scheduling belongs to `dsh-schedule`; a closed app

@@ -162,13 +162,12 @@ export function apply(ctx, config) {
     if (attempt < 6) timers.push(setTimeout(() => whenService(name, run, attempt + 1), 1500 * (attempt + 1)))
   }
 
+  const defaultEveryDays = (settings) =>
+    settings.schedule.frequency === 'weekly' ? 7 : settings.schedule.frequency === 'monthly' ? 30 : 1
   const RUN_INTERVAL_MS = { daily: 86400000, weekly: 7 * 86400000, monthly: 30 * 86400000 }
   const overdue = (settings) => {
-    const last = store.loadState(dataDir).lastRunAt
-    if (!last) return false
-    const gap = Date.now() - new Date(last).getTime()
-    const interval = RUN_INTERVAL_MS[settings.schedule.frequency] ?? RUN_INTERVAL_MS.daily
-    return gap > interval + 60 * 60 * 1000
+    const days = defaultEveryDays(settings)
+    return store.dueTopics(dataDir, days).some((topic) => topic.lastCheckedAt)
   }
 
   whenService('schedule', (schedule) => {
@@ -390,6 +389,7 @@ export function apply(ctx, config) {
       topics: { type: 'array', items: { type: 'string' }, description: '一次加多个主题；与 topic 二选一' },
       keywords: { type: 'array', items: { type: 'string' }, description: '补充搜索关键词，可留空' },
       note: { type: 'string', description: '给自己和巡检用的备注：为什么关注、什么叫有进展' },
+      everyDays: { type: 'number', description: '这条自己的检查间隔（天）。留空则跟随全局调度频率' },
     },
     output: { schema: { type: 'json' }, render: (_args, value) => text(value) },
     async execute(args) {
@@ -400,7 +400,7 @@ export function apply(ctx, config) {
       const added = []
       const existed = []
       for (const name of names) {
-        const result = store.addTopic(dataDir, { topic: name, keywords: args.keywords, note: args.note })
+        const result = store.addTopic(dataDir, { topic: name, keywords: args.keywords, note: args.note, everyDays: args.everyDays })
         if (result.created) added.push(result.topic.topic)
         else existed.push(result.topic.topic)
       }
@@ -477,48 +477,46 @@ export function apply(ctx, config) {
   tool({
     name: 'watchlist_run_brief',
     description:
-      '巡检开始时调用：开一次巡检，返回本次要追踪的主题、检索窗口（从上次巡检到现在）、推送方式和落盘位置。' +
-      '这是"该搜什么、搜哪段时间"的唯一权威来源，不要自己猜。',
+      '巡检开始时调用：开一次巡检，返回本轮**到期**的主题、每个主题各自的检索窗口、推送方式和落盘位置。' +
+      '这是"该搜什么、搜哪段时间"的唯一权威来源，不要自己猜；不在返回里的主题本轮不要搜。',
     parameters: {},
     output: { schema: { type: 'json' }, render: (_args, value) => text(value) },
     async execute() {
       const settings = settingsOf()
       const now = Date.now()
-      const state = store.loadState(dataDir)
       if (store.loadTopics(dataDir).length === 0) {
-        return {
-          message: '关注清单是空的：本次不巡检。先用 watchlist_add 添加主题。',
-          skip: true,
-          reason: 'empty',
-          dataDir,
-        }
+        return { message: '关注清单是空的：本次不巡检。先用 watchlist_add 添加主题。', skip: true, reason: 'empty', dataDir }
       }
       const current = store.currentRun(dataDir)
       if (current && now - new Date(current.startedAt).getTime() < 30 * 60 * 1000) {
-        return {
-          message: '刚刚已经开过一次巡检（30 分钟内），本轮跳过，避免重复劳动。',
-          skip: true,
-          runId: current.id,
-          dataDir,
-        }
+        return { message: '刚刚已经开过一次巡检（30 分钟内），本轮跳过，避免重复劳动。', skip: true, runId: current.id, dataDir }
+      }
+      const days = defaultEveryDays(settings)
+      const due = store.dueTopics(dataDir, days)
+      if (due.length === 0) {
+        return { message: '本轮没有到期的主题：所有条目都还没到各自的下次检查时间。', skip: true, reason: 'none-due', dataDir }
       }
       store.closeCurrentRun(dataDir)
-      const topics = store.loadTopics(dataDir)
-      const limited = topics.slice(0, settings.maxTopicsPerRun)
-      const capDays = 30
+      const limited = due.slice(0, settings.maxTopicsPerRun)
       const fallback = now - settings.lookbackDays * 86400000
-      const lastAt = state.lastRunAt ? new Date(state.lastRunAt).getTime() : NaN
-      const fromMs = Math.max(Number.isFinite(lastAt) ? lastAt : fallback, now - capDays * 86400000)
-      const run = store.startRun(dataDir, { from: new Date(fromMs).toISOString(), to: new Date(now).toISOString() })
-      const coversDays = Math.max(1, Math.round((now - fromMs) / 86400000))
-      const lines = limited.length
-        ? limited.map((t, i) => `${i + 1}. ${t.topic}（id: ${t.id}）${t.keywords.length ? `｜关键词：${t.keywords.join(' / ')}` : ''}${t.note ? `｜关注点：${String(t.note).replace(/^关注点[:：]\s*/, '')}` : ''}`)
-        : ['（清单为空，本次无事可做：直接回复"关注清单是空的"）']
+      const windows = limited.map((topic) => {
+        const last = topic.lastCheckedAt ? new Date(topic.lastCheckedAt).getTime() : NaN
+        return { topic, from: new Date(Number.isFinite(last) ? last : fallback).toISOString() }
+      })
+      const runFrom = windows.reduce((min, item) => (item.from < min ? item.from : min), windows[0].from)
+      const run = store.startRun(dataDir, { from: runFrom, to: new Date(now).toISOString() })
+      const lines = windows.map(
+        (item, index) =>
+          `${index + 1}. ${item.topic.topic}（id: ${item.topic.id}）｜窗口 ${store.formatStamp(item.from)} → 现在` +
+          `${item.topic.everyDays ? `｜每 ${item.topic.everyDays} 天` : ''}` +
+          `${item.topic.keywords.length ? `｜关键词：${item.topic.keywords.join(' / ')}` : ''}` +
+          `${item.topic.note ? `｜关注点：${String(item.topic.note).replace(/^关注点[:：]\s*/, '')}` : ''}`,
+      )
       return {
         message: [
-          `本次巡检 ${store.formatStamp(run.startedAt)}，检索窗口 ${store.formatStamp(run.from)} → 现在（约 ${coversDays} 天），推送 ${settings.push.channels.join('、') || '无'}`,
+          `本次巡检 ${store.formatStamp(run.startedAt)}，到期 ${limited.length}/${store.loadTopics(dataDir).length} 个主题，推送 ${settings.push.channels.join('、') || '无'}`,
           ...lines,
-          topics.length > limited.length ? `（还有 ${topics.length - limited.length} 个主题本轮跳过，下次轮到）` : null,
+          due.length > limited.length ? `（还有 ${due.length - limited.length} 个到期主题本轮跳过，下次轮到）` : null,
           `落盘：每个主题调用一次 watchlist_record；本轮报告写到 ${join(dataDir, 'digests', `${run.id}.md`)}`,
         ]
           .filter(Boolean)
@@ -526,11 +524,17 @@ export function apply(ctx, config) {
         runId: run.id,
         from: run.from,
         to: run.to,
-        coversDays,
         dataDir,
         timeZone: settings.timeZone,
         push: settings.push.channels,
-        topics: limited.map((t) => ({ id: t.id, topic: t.topic, keywords: t.keywords, note: t.note })),
+        topics: windows.map((item) => ({
+          id: item.topic.id,
+          topic: item.topic.topic,
+          from: item.from,
+          everyDays: item.topic.everyDays,
+          keywords: item.topic.keywords,
+          note: item.topic.note,
+        })),
       }
     },
   })

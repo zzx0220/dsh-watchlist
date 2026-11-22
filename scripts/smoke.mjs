@@ -50,6 +50,24 @@ try {
     assert.deepEqual(s2.push.channels, ['session', 'macos'])
   })
 
+  check('topics keep their own cadence', () => {
+    const cadenceDir = mkdtempSync(join(tmpdir(), 'watchlist-cadence-'))
+    try {
+      const daily = store.addTopic(cadenceDir, { topic: '每日主题', everyDays: 1 })
+      const weekly = store.addTopic(cadenceDir, { topic: '每周主题', everyDays: 7 })
+      assert.equal(daily.topic.everyDays, 1)
+      assert.equal(weekly.topic.everyDays, 7)
+      // 都没查过：两条都算到期
+      assert.equal(store.dueTopics(cadenceDir, 1).length, 2)
+      store.touchTopics(cadenceDir, [daily.topic.id])
+      const due = store.dueTopics(cadenceDir, 1)
+      assert.ok(!due.some((t) => t.id === daily.topic.id), '刚查过的每日主题应到期外')
+      assert.ok(due.some((t) => t.id === weekly.topic.id), '每周主题还没查过，应在到期列表')
+    } finally {
+      rmSync(cadenceDir, { recursive: true, force: true })
+    }
+  })
+
   check('a run writes one report file per run', () => {
     const from = new Date(Date.now() - 5 * 86400000).toISOString()
     const run = store.startRun(dir, { from })
