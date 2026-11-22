@@ -195,8 +195,13 @@ window.__ModuleLoader__.load({
      * 模块级状态会让「footer 按钮」和「shell.overlay」各拿一份，点击永远没有回响。
      */
     function uiStore() {
-      if (!window.__dshWatchlistUi) window.__dshWatchlistUi = { open: false, reader: null, listeners: new Set() }
+      if (!window.__dshWatchlistUi) window.__dshWatchlistUi = { open: false, reader: null, dataRev: 0, listeners: new Set() }
       return window.__dshWatchlistUi
+    }
+    function bumpData() {
+      const ui = uiStore()
+      ui.dataRev += 1
+      notifyUi()
     }
     function notifyUi() {
       for (const listener of uiStore().listeners) listener()
@@ -224,7 +229,7 @@ window.__ModuleLoader__.load({
         return () => ui.listeners.delete(listener)
       }, [])
       const ui = uiStore()
-      return { open: ui.open, reader: ui.reader }
+      return { open: ui.open, reader: ui.reader, dataRev: ui.dataRev }
     }
 
     function useWatchlist() {
@@ -289,8 +294,8 @@ window.__ModuleLoader__.load({
       .dwl-day { margin: 4px 0; }
       .dwl-daybtn { background: none; border: 0; color: inherit; font: inherit; cursor: pointer; padding: 2px 0; display: flex; gap: 8px; }
       .dwl-src { color: var(--dsw-alias-label-secondary, #666); font-size: 12px; word-break: break-all; }
-      .dwl-badge { position: absolute; top: -2px; right: -4px; min-width: 14px; height: 14px; line-height: 14px; padding: 0 3px;
-        border-radius: 7px; background: var(--dsw-alias-brand-primary, #247bbf); color: #fff; font-size: 10px; text-align: center; }
+      .dwl-badge { position: absolute; top: -3px; right: -6px; min-width: 16px; height: 16px; line-height: 16px; padding: 0 4px;
+        border-radius: 8px; background: var(--dsw-alias-brand-primary, #247bbf); color: #fff; font-size: 10px; font-weight: 600; }
       .dwl-footer-btn { position: relative; display: flex; align-items: center; gap: 6px; border: 0; background: none; color: inherit;
         cursor: pointer; padding: 5px 6px; border-radius: 6px; font: inherit; font-size: 12px; }
       .dwl-footer-btn:hover { background: var(--dsw-alias-bg-layer-2, rgba(0,0,0,.06)); }
@@ -585,11 +590,14 @@ window.__ModuleLoader__.load({
     function FooterAction(props) {
       useLang()
       const { state, reload } = useWatchlist()
+      const { open, reader: readerOpen, dataRev } = useUiState()
+      useEffect(() => {
+        reload()
+      }, [reload, dataRev])
       useEffect(() => {
         const timer = setInterval(reload, 60000)
         return () => clearInterval(timer)
       }, [reload])
-      const { open, reader: readerOpen } = useUiState()
       const unread = (state && state.unread) || 0
       const wide = props && props.wide !== false
       return h(
@@ -615,7 +623,9 @@ window.__ModuleLoader__.load({
           h('circle', { cx: 12, cy: 12, r: 1, fill: 'currentColor', stroke: 'none' }),
         ),
         wide ? h('span', null, COPY.nav) : null,
-        unread > 0 ? h('span', { className: 'dwl-badge' }, unread > 99 ? '99+' : String(unread)) : null,
+        unread > 0
+          ? h('span', { className: 'dwl-badge', title: `${unread} ${zh() ? '条未读' : 'unread'}` }, unread > 99 ? '99+' : String(unread))
+          : null,
       )
     }
 
@@ -819,7 +829,7 @@ window.__ModuleLoader__.load({
       useEffect(() => {
         if (!open && !reader) return undefined
         reload()
-        if (open && !reader) act('seen').then(reload)
+        if (open && !reader) act('seen').then(() => { bumpData(); reload() })
         const onKey = (event) => {
           if (event.key !== 'Escape') return
           if (reader) closeReader()
