@@ -14,7 +14,22 @@
 
 ## 安装
 
-本机目录安装：**Plugins → Add plugin**，选择本仓库目录；或
+```sh
+dsh plugin --profile desktop add @zzx0220/dsh-watchlist
+```
+
+然后**完全退出 DeepSeek Harness 再重新打开**——Host 半是应用启动时加载的模块。
+装好后让 Agent 调一次 `watchlist_list`，能看到清单就说明加载成功。
+
+卸载：
+
+```sh
+dsh plugin --profile desktop remove @zzx0220/dsh-watchlist
+```
+
+数据在 `~/.dsh/watchlist`，删掉这个目录就彻底清除。
+
+如果你要改插件本身，让 profile 指向本地目录：
 
 ```sh
 dsh plugin --profile desktop add /绝对路径/dsh-watchlist

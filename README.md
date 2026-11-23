@@ -18,7 +18,22 @@ summaries where you want them.
 
 ## Install
 
-Local directory: **Plugins → Add plugin**, pick this directory; or
+```sh
+dsh plugin --profile desktop add @zzx0220/dsh-watchlist
+```
+
+Then **quit and reopen DeepSeek Harness** — the Host half is a module the app loads at
+startup. Ask the agent for your watchlist (`watchlist_list`) to confirm it loaded.
+
+To uninstall:
+
+```sh
+dsh plugin --profile desktop remove @zzx0220/dsh-watchlist
+```
+
+Data lives in `~/.dsh/watchlist`; delete that directory to remove it completely.
+
+Working on the plugin itself? Point a profile at the checkout instead:
 
 ```sh
 dsh plugin --profile desktop add /absolute/path/dsh-watchlist
