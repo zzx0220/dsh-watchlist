@@ -3,7 +3,10 @@
 Earlier versions predate this file; the entries below start with the release
 preparation for the first public version.
 
-## Unreleased
+## 0.8.0 — 2026-11-23
+
+First public release. The package name, the loader row and the client factory id now
+carry the `@zzx0220` scope; everything else follows from the release preparation below.
 
 - **Package renamed** to `@zzx0220/dsh-watchlist`. The unscoped `dsh-watchlist`
   belongs to another publisher, so the package moved under a scope only this account
