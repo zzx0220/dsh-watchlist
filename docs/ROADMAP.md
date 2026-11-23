@@ -12,7 +12,7 @@ Design agreed on 2026-11-22. Recorded here so the later implementation has a fix
 
 **Content** — one short line, no details, just the short names or keywords of the topics that changed, e.g.
 
-> Watchlist: progress on Riemann hypothesis, P vs NP
+> Watchlist: progress on a model release, a draft standard
 
 **Click** — opening the notification should land on the content itself: prefer activating the DeepSeek Harness window and navigating to that run's report; fall back to opening the report file with the system default application when activation is not possible.
 
@@ -93,7 +93,7 @@ design have settled, and decide then whether the scenario is worth the extra con
 
 **内容**：一句话提示，不展开细节，只列命中主题的关键词/短名，例如
 
-> 关注清单：黎曼猜想、P vs NP 有新进展
+> 关注清单：某个模型新版本、某标准草案 有新进展
 
 **交互**：点击通知要能直接进入内容——优先打开 DeepSeek Harness 窗口并定位到该次巡检的报告（内置阅读），做不到时再退化为用系统默认程序打开报告文件。
 
