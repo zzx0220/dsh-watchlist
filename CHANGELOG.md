@@ -7,6 +7,8 @@ preparation for the first public version.
 
 First public release. The package name, the loader row and the client factory id now
 carry the `@zzx0220` scope; everything else follows from the release preparation below.
+Both READMEs carry a compatibility table of the tested DSH versions, and
+`scripts/compat.mjs` re-runs that check against any published version.
 
 - **Package renamed** to `@zzx0220/dsh-watchlist`. The unscoped `dsh-watchlist`
   belongs to another publisher, so the package moved under a scope only this account

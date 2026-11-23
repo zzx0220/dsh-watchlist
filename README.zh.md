@@ -28,6 +28,27 @@ dsh plugin --profile desktop add /绝对路径/dsh-watchlist
 2. 「开启每天 8:30 巡检，并推一条 macOS 通知」→ `watchlist_settings` + `watchlist_schedule sync`
 3. 「现在跑一次」→ `watchlist_schedule run_now`（或直接让 Agent 执行巡检）
 
+## 兼容性
+
+写在 `engines.dsh` 里：**`>=0.2.2-rc.3 <0.3.0`**。范围外的运行时会在安装时直接拒绝，
+并打印要求，而不是装上一个从没在它上面验证过的插件、然后半坏。
+
+已验证：
+
+| DSH 版本 | 安装与组合 | Host 接口应答 |
+| --- | --- | --- |
+| `0.2.2-rc.2` | 拒绝（范围外，符合预期） | — |
+| `0.2.2-rc.3` | 通过 | 通过（日常使用的那一版） |
+| `0.2.2-rc.4` | 通过 | 未跑 |
+| `0.2.2-rc.5`（发布时 latest） | 通过 | 通过 |
+| `0.2.3-alpha.2` | 通过 | 未跑 |
+
+维护者可以对任意已发布版本重跑这套检查，不必安装它：
+
+```sh
+node scripts/compat.mjs 0.2.2-rc.5 --runtime
+```
+
 ## 语言
 
 插件写出来的所有文字都跟随 `settings.locale`：`auto`（默认）读系统语言，`zh` 和 `en`

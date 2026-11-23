@@ -64,6 +64,7 @@
   },
   "scripts": {
     "smoke": "node scripts/smoke.mjs",
-    "check": "node scripts/smoke.mjs && node scripts/client-check.mjs"
+    "check": "node scripts/smoke.mjs && node scripts/client-check.mjs",
+    "compat": "node scripts/compat.mjs"
   }
 }

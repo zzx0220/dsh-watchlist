@@ -33,6 +33,28 @@ In any conversation:
    then `watchlist_schedule sync`
 3. "Run it now" → `watchlist_schedule run_now`
 
+## Compatibility
+
+Declared as `engines.dsh`: **`>=0.2.2-rc.3 <0.3.0`**. A runtime outside that range
+refuses the install with the requirement spelled out, instead of loading a plugin that
+was never tested against it.
+
+Verified so far:
+
+| DSH version | Install and compose | Host API answers |
+| --- | --- | --- |
+| `0.2.2-rc.2` | refused (outside the range, as intended) | — |
+| `0.2.2-rc.3` | yes | yes (the build in daily use) |
+| `0.2.2-rc.4` | yes | not run |
+| `0.2.2-rc.5` (latest at release) | yes | yes |
+| `0.2.3-alpha.2` | yes | not run |
+
+Maintainers can re-run that check against any published version without installing it:
+
+```sh
+node scripts/compat.mjs 0.2.2-rc.5 --runtime
+```
+
 ## Language
 
 Everything the plugin writes follows `settings.locale`: `auto` (the default) reads the
