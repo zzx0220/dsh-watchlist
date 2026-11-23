@@ -3,9 +3,11 @@
 Earlier versions predate this file; the entries below start with the release
 preparation for the first public version.
 
-## 0.8.0 — 2026-11-23
+## 0.8.0-rc.1 — 2026-11-23
 
-First public release. The package name, the loader row and the client factory id now
+Release candidate for the first public version: handed out as a tarball for a trial
+period, not published to npm yet. A different build may follow before `0.8.0` ships.
+The package name, the loader row and the client factory id now
 carry the `@zzx0220` scope; everything else follows from the release preparation below.
 Both READMEs carry a compatibility table of the tested DSH versions, and
 `scripts/compat.mjs` re-runs that check against any published version.
