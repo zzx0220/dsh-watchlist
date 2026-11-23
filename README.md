@@ -55,6 +55,19 @@ Maintainers can re-run that check against any published version without installi
 node scripts/compat.mjs 0.2.2-rc.5 --runtime
 ```
 
+## Maintenance
+
+This is a personal project, published because it turned out useful. Issues and pull
+requests are handled on a best-effort basis: expect a reply rather than a deadline.
+What that means concretely:
+
+- The supported runtime is exactly the `engines.dsh` range in the table above. A newer
+  DeepSeek Harness may work but is not promised until the table says so.
+- When a DeepSeek Harness release breaks the plugin, a patch follows when there is
+  time — not on a schedule.
+- A report is actionable when it carries the plugin version, the DSH version, the OS,
+  and the interface language.
+
 ## Language
 
 Everything the plugin writes follows `settings.locale`: `auto` (the default) reads the

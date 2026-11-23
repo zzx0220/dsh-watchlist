@@ -49,6 +49,16 @@ dsh plugin --profile desktop add /绝对路径/dsh-watchlist
 node scripts/compat.mjs 0.2.2-rc.5 --runtime
 ```
 
+## 维护
+
+这是一个个人项目，因为自己用着顺手才公开。issue 和 PR 都是尽力而为：会有回复，
+但没有期限。具体含义：
+
+- 支持的运行时就是上面表里 `engines.dsh` 的范围。更新的 DeepSeek Harness 也许能用，
+  但在表里更新之前不算承诺。
+- DSH 发新版导致插件坏掉时，有空就修，不按排期。
+- 一份能处理的报告需要包含：插件版本、DSH 版本、操作系统、界面语言。
+
 ## 语言
 
 插件写出来的所有文字都跟随 `settings.locale`：`auto`（默认）读系统语言，`zh` 和 `en`
