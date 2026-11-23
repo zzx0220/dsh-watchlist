@@ -3,6 +3,13 @@
 Keep a list of topics you want to follow, and let a scheduled agent look for new
 progress, write it down, and push a summary.
 
+## Requirements
+
+- DeepSeek Harness `>=0.2.2-rc.3 <0.3.0`. An older or newer runtime refuses the install
+  instead of loading a plugin that was never tested against it.
+- macOS or Windows. Native notifications exist on macOS only.
+- Automatic checks start **off**; a run spends model tokens per topic.
+
 ## What it does
 
 1. You keep a topic list (`watchlist_add` / `watchlist_remove`, or ask the agent

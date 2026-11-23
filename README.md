@@ -100,6 +100,7 @@ undeterminable language falls back to English.
 | Tool | Purpose |
 | --- | --- |
 | `watchlist_add` | Add a topic (optional keywords and note) |
+| `watchlist_update` | Change one topic's interval, note, or keywords |
 | `watchlist_remove` | Remove by id or unique name |
 | `watchlist_list` | Topics, settings, schedule status |
 | `watchlist_run_brief` | Authoritative brief for one run: topics, lookback, push channels |

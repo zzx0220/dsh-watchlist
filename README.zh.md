@@ -88,6 +88,7 @@ node scripts/compat.mjs 0.2.2-rc.5 --runtime
 | 工具 | 作用 |
 | --- | --- |
 | `watchlist_add` | 加主题（可带关键词、备注） |
+| `watchlist_update` | 改单个主题的间隔、备注或关键词 |
 | `watchlist_remove` | 删主题（id 或唯一名称） |
 | `watchlist_list` | 看清单、设置、调度状态 |
 | `watchlist_run_brief` | 巡检开始时的权威 brief：主题、回溯天数、推送方式 |

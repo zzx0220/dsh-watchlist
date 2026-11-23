@@ -25,17 +25,16 @@ Design agreed on 2026-11-22. Recorded here so the later implementation has a fix
 
 **Acceptance** — 3 topics, 2 with progress → exactly one notification per run, naming those 2 topics, and clicking it shows that run's report.
 
-### 2. UI polish: footer entry and report Markdown — awaiting user design (2026-11-22)
+### 2. UI polish: sidebar entry and report Markdown — spec not written (2026-11-22)
 
-Two things the user is not satisfied with. The change itself is not decided yet: the
-user will describe the intended look, and this section should then be turned into a
-concrete spec. Do not implement a guessed design before that.
+Two rough edges worth revisiting. Neither has a decided design: write the spec before
+changing anything, rather than guessing at a look.
 
-1. **Bottom-left watchlist entry** — the icon plus label in the left nav footer looks
-   stiff and plain. `.dwl-footer-btn` in `client.js` is a flat transparent button: a
+1. **Sidebar watchlist row** — the icon plus label in the left nav (`sidebar.panellist`)
+   looks stiff and plain. `.dwl-footer-btn` in `client.js` is a flat transparent button: a
    16×16 SVG bullseye (three concentric circles), a 12px label when the nav is wide, and
    an unread badge; the only state change is a hover background.
-2. **Right-sidebar report rendering** — reports look bad as rendered. The `Markdown`
+2. **Report Markdown rendering** — reports look bad as rendered. The `Markdown`
    component in `client.js` is a deliberate minimal renderer: `# ` / `## ` heading lines
    become styled divs, `-` / `*` bullets become one `<ul>`, and inline text supports only
    `**bold**` plus bare URLs. Paragraphs are plain divs with a 3px vertical margin, so

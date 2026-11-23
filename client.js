@@ -1,11 +1,13 @@
 /**
  * dsh-watchlist — Client half.
  *
- * Three surfaces:
+ * Four surfaces:
  *   settings.section       the full “Watchlist” page: add/remove topics, check
  *                          settings, push channels, report body
- *   sidebar.footer.action  footer icon plus an unread dot
- *   shell.overlay          unread overlay: entries from the latest run, mark as read
+ *   main                   the same page in the centre column
+ *   sidebar.panellist      the sidebar row: icon, label, unread count
+ *   shell.overlay          one report's reader, the notification dispatcher, and the
+ *                          badge counter
  *
  * Data comes from the host's /dsh-watchlist-api (loopback only); the client half
  * never touches the filesystem.
@@ -1391,7 +1393,7 @@ window.__ModuleLoader__.load({
       })
     }
 
-    /** One report: the day file's own Markdown, a shortcut to the right sidebar, and the file itself. */
+    /** One report: the day file's own Markdown and the file itself. */
     function Reader({ view }) {
       const [text, setText] = useState('')
       const [error, setError] = useState('')
