@@ -33,6 +33,14 @@ In any conversation:
    then `watchlist_schedule sync`
 3. "Run it now" → `watchlist_schedule run_now`
 
+## Language
+
+Everything the plugin writes follows `settings.locale`: `auto` (the default) reads the
+system language, `zh` and `en` force one. That covers the Automation task title, the
+check instruction delivered to a session, digest labels, tool results and errors; the
+in-app page follows the same setting through DeepSeek Harness's own locale. An
+undeterminable language falls back to English.
+
 ## Tools
 
 | Tool | Purpose |

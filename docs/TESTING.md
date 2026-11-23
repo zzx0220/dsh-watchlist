@@ -48,12 +48,24 @@ Two rules keep it useful:
   panel and the day file are supposed to stay clean.
 - For L3 keep DevTools open: a deleted helper in `client.js` shows up as a
   `ReferenceError` at render time, not at load time.
-- **Language.** Quoted copy below is English, the default when `settings.locale`
-  resolves to English. With `locale: "zh"` (or `"auto"` on a Chinese desktop) the
-  same strings appear in Chinese — `关注清单：N 个主题`, `- 状态：有实质进展`,
-  `# 关注清单日报 <day>` and so on. Check the language first when a message does
-  not match the quoted text: `watchlist_list` prints `时区`/`time zone` and the
-  Settings page follows its own locale switch.
+- **Language.** The cases below were written while the copy was Chinese, so most
+  quoted strings are Chinese; newer cases quote English. Both are correct — which
+  one appears follows `settings.locale` (`auto` reads the system language). Map the
+  frequent lines before calling a mismatch a bug:
+
+  | Chinese (locale `zh` / `auto` on a zh desktop) | English (locale `en`) |
+  | --- | --- |
+  | `关注清单：N 个主题` | `Watchlist: N topics` |
+  | `调度：…｜任务 active` | `Schedule: … · task active` |
+  | `推送：…` / `窗口：…｜数据目录：…` | `Push: …` / `Window: … · data: …` |
+  | `已加入：「x」` / `已更新「x」` | `added: “x”` / `updated “x”` |
+  | `# 关注清单日报 <day>` | `# Watchlist digest <day>` |
+  | `## 第 N 次巡检 <time>` | `## Check N at <time>` |
+  | `- 状态：有实质进展` / `- 摘要：` | `- Status: real progress` / `- Summary:` |
+  | `- 重要：是` / `【重要】` | `- Important: yes` / `[important]` |
+
+  Tool descriptions and parameter descriptions are English in both locales: the
+  model reads them, not the user.
 
 ## 3. L0 — automated checks (no Harness, no data)
 

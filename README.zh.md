@@ -28,6 +28,12 @@ dsh plugin --profile desktop add /绝对路径/dsh-watchlist
 2. 「开启每天 8:30 巡检，并推一条 macOS 通知」→ `watchlist_settings` + `watchlist_schedule sync`
 3. 「现在跑一次」→ `watchlist_schedule run_now`（或直接让 Agent 执行巡检）
 
+## 语言
+
+插件写出来的所有文字都跟随 `settings.locale`：`auto`（默认）读系统语言，`zh` 和 `en`
+强制指定。范围包括自动化任务标题、投递到会话里的巡检指令、日报标签、工具返回和报错；
+应用内页面通过 DeepSeek Harness 自己的语言设置跟随同一档。判断不出来时回退英文。
+
 ## 工具
 
 | 工具 | 作用 |
