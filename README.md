@@ -19,8 +19,12 @@ summaries where you want them.
 ## Install
 
 ```sh
-dsh plugin --profile desktop add @zzx0220/dsh-watchlist
+dsh plugin --profile desktop add @zzx0220/dsh-watchlist@0.8.0-rc.1
 ```
+
+This is a **release candidate**: the version carries the `rc` dist-tag, so pin the
+version as above. Once `0.8.0` is published the bare package name resolves and the
+version suffix can be dropped.
 
 Then **quit and reopen DeepSeek Harness** — the Host half is a module the app loads at
 startup. Ask the agent for your watchlist (`watchlist_list`) to confirm it loaded.

@@ -15,8 +15,11 @@
 ## 安装
 
 ```sh
-dsh plugin --profile desktop add @zzx0220/dsh-watchlist
+dsh plugin --profile desktop add @zzx0220/dsh-watchlist@0.8.0-rc.1
 ```
+
+这是**预发布版**：版本挂在 `rc` 标签下，所以上面要写全版本号。等 `0.8.0` 发布之后，
+直接写包名即可，不需要版本后缀。
 
 然后**完全退出 DeepSeek Harness 再重新打开**——Host 半是应用启动时加载的模块。
 装好后让 Agent 调一次 `watchlist_list`，能看到清单就说明加载成功。
